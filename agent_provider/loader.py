@@ -1,18 +1,18 @@
 import importlib.util
 import os
 
-from .base import LLMProvider
+from .base import AgentProvider
 from .keyword_match import KeywordMatchProvider
 from .openai_compatible import OpenAICompatibleProvider
 
 
-def build_provider(config: dict) -> LLMProvider:
-    """Construct an LLMProvider from the 'llm' section of mcp_servers_config.json.
+def build_provider(config: dict) -> AgentProvider:
+    """Construct an AgentProvider from the 'llm' section of mcp_servers_config.json.
 
     Supported provider types:
     - "openai_compatible" (default): uses OpenAICompatibleProvider.
     - "keyword_match": uses KeywordMatchProvider (no LLM required).
-    - "custom": dynamically loads a LLMProvider subclass via _load_custom_provider().
+    - "custom": dynamically loads a AgentProvider subclass via _load_custom_provider().
     """
     provider_type = config.get("provider", "openai_compatible")
 
@@ -32,11 +32,11 @@ def build_provider(config: dict) -> LLMProvider:
     raise ValueError(f"Unknown provider type: {provider_type!r}")
 
 
-def _load_custom_provider(config: dict) -> LLMProvider:
-    """Dynamically import and instantiate a user-supplied LLMProvider subclass.
+def _load_custom_provider(config: dict) -> AgentProvider:
+    """Dynamically import and instantiate a user-supplied AgentProvider subclass.
 
     Reads "module" (path to a .py file) and "class" (class name) from the config.
-    The class must be a subclass of LLMProvider. All remaining config keys are passed
+    The class must be a subclass of AgentProvider. All remaining config keys are passed
     as keyword arguments to the constructor; "api_key_env" is resolved to its env value first.
     """
     module_path = config.get("module")
@@ -53,8 +53,8 @@ def _load_custom_provider(config: dict) -> LLMProvider:
     cls = getattr(module, class_name, None)
     if cls is None:
         raise AttributeError(f"Class {class_name!r} not found in {module_path!r}")
-    if not (isinstance(cls, type) and issubclass(cls, LLMProvider)):
-        raise TypeError(f"{class_name!r} must be a subclass of LLMProvider")
+    if not (isinstance(cls, type) and issubclass(cls, AgentProvider)):
+        raise TypeError(f"{class_name!r} must be a subclass of AgentProvider")
 
     kwargs = {k: v for k, v in config.items() if k not in {"provider", "module", "class"}}
     if "api_key_env" in kwargs:

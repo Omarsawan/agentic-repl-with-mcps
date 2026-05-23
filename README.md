@@ -11,7 +11,7 @@ User input (REPL)
 MCPHost._turn()          ← drives the agentic loop
       │
       ▼
-LLMProvider.chat()       ← sends history + tools schema to the LLM
+AgentProvider.chat()     ← sends history + tools schema to the LLM
       │
       ├─ tool calls? ──► MCPHost._dispatch_tool()
       │                        │
@@ -35,13 +35,13 @@ Manages a single MCP server connection over stdio. `MCPClient` spawns the server
 
 The central coordinator. `MCPHost` reads `mcp_servers_config.json`, instantiates the LLM provider and one `MCPClient` per configured server, and builds a namespaced tool registry (`servername__toolname`) so tool names stay unique across servers. `_turn()` implements the core agentic loop, and `run()` wraps it in an interactive REPL that also handles `/tools`, `/history`, `/reset`, and `/quit` commands.
 
-### [llm_provider/](llm_provider/)
+### [agent_provider/](agent_provider/)
 
-LLM provider abstraction layer.
+Agent provider abstraction layer.
 
 | File | Purpose |
 |------|---------|
-| `base.py` | `LLMProvider` ABC, `ToolCall` and `ChatResponse` dataclasses |
+| `base.py` | `AgentProvider` ABC, `ToolCall` and `ChatResponse` dataclasses |
 | `openai_compatible.py` | Works with any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, OpenRouter, etc.) |
 | `keyword_match.py` | No-LLM test provider: matches user input against tool names without calling an LLM |
 | `loader.py` | `build_provider()` factory; supports dynamic loading of custom provider classes |
@@ -71,7 +71,7 @@ MCP server for read-only MySQL access over an SSH tunnel. Automatically opens an
 
 ### [mcp_servers_config.json](mcp_servers_config.json)
 
-Runtime configuration file. The `llm` section sets the provider type, endpoint URL, model name, and the environment variable that holds the API key. The `mcpServers` section maps server names to their launch commands. Add a new entry here to connect any additional MCP-compatible server without touching Python code.
+Runtime configuration file. The `agent` section sets the provider type, endpoint URL, model name, and the environment variable that holds the API key. The `mcpServers` section maps server names to their launch commands. Add a new entry here to connect any additional MCP-compatible server without touching Python code.
 
 ## Quick start
 
@@ -107,31 +107,31 @@ python host.py
 
 ### Switching LLM backends
 
-Edit the `llm` block in `mcp_servers_config.json` — no code changes required.
+Edit the `agent` block in `mcp_servers_config.json` — no code changes required.
 
 **Ollama** (default, local):
 ```json
-"llm": { "provider": "openai_compatible", "base_url": "http://localhost:11434/v1", "model": "qwen2.5:7b" }
+"agent": { "provider": "openai_compatible", "base_url": "http://localhost:11434/v1", "model": "qwen2.5:7b" }
 ```
 
 **OpenRouter** (cloud, many models):
 ```json
-"llm": { "provider": "openai_compatible", "base_url": "https://openrouter.ai/api/v1", "model": "mistralai/mistral-7b-instruct", "api_key_env": "OPENROUTER_API_KEY" }
+"agent": { "provider": "openai_compatible", "base_url": "https://openrouter.ai/api/v1", "model": "mistralai/mistral-7b-instruct", "api_key_env": "OPENROUTER_API_KEY" }
 ```
 
 **vLLM** (self-hosted, OpenAI-compatible):
 ```json
-"llm": { "provider": "openai_compatible", "base_url": "http://localhost:8000/v1", "model": "mistralai/Mistral-7B-Instruct-v0.2", "api_key_env": "VLLM_API_KEY" }
+"agent": { "provider": "openai_compatible", "base_url": "http://localhost:8000/v1", "model": "mistralai/Mistral-7B-Instruct-v0.2", "api_key_env": "VLLM_API_KEY" }
 ```
 
 **LM Studio** (local GUI):
 ```json
-"llm": { "provider": "openai_compatible", "base_url": "http://localhost:1234/v1", "model": "local-model" }
+"agent": { "provider": "openai_compatible", "base_url": "http://localhost:1234/v1", "model": "local-model" }
 ```
 
 **Keyword Match** (no LLM, for testing):
 ```json
-"llm": { "provider": "keyword_match" }
+"agent": { "provider": "keyword_match" }
 ```
 Selects a tool by matching tokens from your query against tool names and descriptions — no API key or running model needed. Useful for testing tool wiring without an LLM. If no tool matches, it returns a plain text fallback message.
 

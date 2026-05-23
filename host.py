@@ -10,7 +10,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from mcp_client import MCPClient
-from llm_provider import LLMProvider, ToolCall, build_provider
+from agent_provider import AgentProvider, ToolCall, build_provider
 
 load_dotenv()
 
@@ -35,7 +35,7 @@ class MCPHost:
     def __init__(self) -> None:
         """Initialise empty state; call run() to connect servers and start the REPL."""
         self._clients: dict[str, MCPClient] = {}
-        self._provider: LLMProvider | None = None
+        self._provider: AgentProvider | None = None
         # name visible to LLM → (client, original tool name)
         self._tool_index: dict[str, tuple[MCPClient, str]] = {}
         self._tools_schema: list[dict] = []
@@ -51,7 +51,7 @@ class MCPHost:
         with config_path.open() as f:
             config: dict = json.load(f)
 
-        self._provider = build_provider(config.get("llm", {}))
+        self._provider = build_provider(config.get("agent", {}))
 
         servers: dict[str, dict] = config.get("mcpServers", {})
         for server_name, server_cfg in servers.items():

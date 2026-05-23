@@ -1,9 +1,9 @@
 import uuid
 
-from .base import ChatResponse, LLMProvider, ToolCall
+from .base import AgentProvider, ChatResponse, ToolCall
 
 
-class KeywordMatchProvider(LLMProvider):
+class KeywordMatchProvider(AgentProvider):
     """No-LLM provider: matches the user's input against tool names and descriptions.
 
     Scores each tool by counting how many query tokens appear in its name + description.

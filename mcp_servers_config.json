@@ -1,5 +1,5 @@
 {
-  "llm": {
+  "agent": {
     "provider": "openai_compatible",
     "base_url": "http://localhost:11434/v1",
     "model": "qwen2.5:7b"

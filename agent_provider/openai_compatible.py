@@ -3,10 +3,10 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from .base import ChatResponse, LLMProvider, ToolCall
+from .base import AgentProvider, ChatResponse, ToolCall
 
 
-class OpenAICompatibleProvider(LLMProvider):
+class OpenAICompatibleProvider(AgentProvider):
     """Works with any OpenAI-compatible endpoint: Ollama, vLLM, LM Studio, OpenRouter, etc."""
 
     def __init__(self, base_url: str, model: str, api_key: str = "ollama") -> None:

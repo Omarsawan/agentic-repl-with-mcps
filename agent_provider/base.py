@@ -20,7 +20,7 @@ class ChatResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
 
 
-class LLMProvider(ABC):
+class AgentProvider(ABC):
     """Abstract base class for LLM backends.
 
     Subclass this to add a custom provider. The only method to implement is chat().
