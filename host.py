@@ -15,17 +15,19 @@ from agent_provider import AgentProvider, ToolCall, build_provider
 load_dotenv()
 
 CONFIG_FILE = Path(__file__).parent / "mcp_servers_config.json"
+CUSTOM_COMMANDS_FILE = Path(__file__).parent / "custom_commands.json"
 
 _SYSTEM_ENV_KEYS = frozenset({})
 
 MAX_TOOL_ITERATIONS = 20
 
-HELP_TEXT = """
+_BUILTIN_HELP = """\
 Commands:
-  /tools   — list all available tools
-  /history — print conversation history
-  /reset   — clear conversation history
-  /quit    — exit
+  /tools    — list all available MCP tools
+  /commands — list custom commands loaded from custom_commands.json
+  /history  — print conversation history
+  /reset    — clear conversation history
+  /quit     — exit
 """
 
 
@@ -40,6 +42,7 @@ class MCPHost:
         self._tool_index: dict[str, tuple[MCPClient, str]] = {}
         self._tools_schema: list[dict] = []
         self._history: list[dict] = []
+        self._custom_commands: dict[str, dict] = {}
         self._exit_stack = AsyncExitStack()
 
     # ------------------------------------------------------------------
@@ -65,6 +68,14 @@ class MCPHost:
             self._clients[server_name] = client
 
         await self._build_tool_index()
+        self._custom_commands = self._load_custom_commands()
+
+    def _load_custom_commands(self) -> dict:
+        """Load custom commands from custom_commands.json if it exists."""
+        if not CUSTOM_COMMANDS_FILE.exists():
+            return {}
+        with CUSTOM_COMMANDS_FILE.open() as f:
+            return json.load(f)
 
     async def _build_tool_index(self) -> None:
         """Build a namespaced tool registry (servername__toolname) across all connected clients."""
@@ -192,6 +203,22 @@ class MCPHost:
             print(f"  {namespaced:<40} {desc}")
         print()
 
+    def _print_custom_commands(self) -> None:
+        """Print all custom commands loaded from custom_commands.json."""
+        if not self._custom_commands:
+            print("No custom commands loaded. Add them to custom_commands.json.")
+            return
+        print("\nCustom commands (from custom_commands.json):")
+        for name, meta in self._custom_commands.items():
+            print(f"  /{name:<20} — {meta.get('description', '(no description)')}")
+        print()
+
+    def _print_help(self) -> None:
+        """Print built-in commands followed by any custom commands from custom_commands.json."""
+        print()
+        print(_BUILTIN_HELP)
+        self._print_custom_commands()
+
     async def _read_input(self, prompt: str) -> str:
         """Read a line of user input without blocking the event loop."""
         return await asyncio.to_thread(input, prompt)
@@ -227,7 +254,18 @@ class MCPHost:
                     self._print_tools()
                     continue
                 if line in ("/help", "help"):
-                    print(HELP_TEXT)
+                    self._print_help()
+                    continue
+                if line == "/commands":
+                    self._print_custom_commands()
+                    continue
+
+                if line.startswith("/"):
+                    cmd_name = line[1:]
+                    if cmd_name in self._custom_commands:
+                        await self._turn(self._custom_commands[cmd_name]["prompt"])
+                    else:
+                        print(f"Unknown command: {line}. Type /help for available commands.")
                     continue
 
                 await self._turn(line)

@@ -1,0 +1,18 @@
+{
+  "summarize": {
+    "description": "Summarize the conversation so far",
+    "prompt": "Please provide a concise summary of our conversation so far, highlighting the key points and any actions taken."
+  },
+  "status": {
+    "description": "Report available tools and session progress",
+    "prompt": "What tools are available and what have we accomplished in this session?"
+  },
+  "input-events": {
+    "description": "Check latest input events",
+    "prompt": "read from input_event table in jump database to get status, id_input_event_type, created_at for rows created in the last 6 days"
+  },
+  "temporal-workflows": {
+    "description": "List latest temporal workflows",
+    "prompt": "list temporal workflows in the last 6 hours, make sure that you know the current time"
+  }
+}
