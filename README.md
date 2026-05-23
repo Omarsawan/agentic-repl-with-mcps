@@ -129,6 +129,12 @@ Edit the `llm` block in `mcp_servers.json` — no code changes required.
 "llm": { "provider": "openai_compatible", "base_url": "http://localhost:1234/v1", "model": "local-model" }
 ```
 
+**Keyword Match** (no LLM, for testing):
+```json
+"llm": { "provider": "keyword_match" }
+```
+Selects a tool by matching tokens from your query against tool names and descriptions — no API key or running model needed. Useful for testing tool wiring without an LLM. If no tool matches, it returns a plain text fallback message.
+
 Available REPL commands:
 
 | Command    | Effect                          |
