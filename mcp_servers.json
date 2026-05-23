@@ -1,0 +1,43 @@
+{
+  "llm": {
+    "provider": "openai_compatible",
+    "base_url": "http://localhost:11434/v1",
+    "model": "qwen2.5:7b"
+  },
+  "mcpServers": {
+    "sample": {
+      "command": "python",
+      "args": ["mcp_servers/sample_server.py"],
+      "allowedEnv": [],
+      "env": {}
+    },
+    "temporal": {
+      "command": "python",
+      "args": ["mcp_servers/temporal_server.py"],
+      "allowedEnv": [
+        "TEMPORAL_ADDRESS",
+        "TEMPORAL_NAMESPACE",
+        "TEMPORAL_TLS_CERT",
+        "TEMPORAL_TLS_KEY",
+        "TEMPORAL_UI_BASE_URL"
+      ],
+      "env": {}
+    },
+    "mysql": {
+      "command": "python",
+      "args": ["mcp_servers/mysql_server.py"],
+      "allowedEnv": [
+        "MYSQL_SSH_HOST",
+        "MYSQL_SSH_PORT",
+        "MYSQL_SSH_USER",
+        "MYSQL_SSH_KEY_PATH",
+        "MYSQL_HOST",
+        "MYSQL_PORT",
+        "MYSQL_USER",
+        "MYSQL_PASSWORD",
+        "MYSQL_DATABASE"
+      ],
+      "env": {}
+    }
+  }
+}

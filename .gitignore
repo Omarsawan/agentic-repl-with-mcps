@@ -1,0 +1,26 @@
+# macOS metadata
+.DS_Store
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+.env.*
+
+# Certificates and keys
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.pub
