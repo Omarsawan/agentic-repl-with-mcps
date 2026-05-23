@@ -23,7 +23,7 @@ LLMProvider.chat()       ← sends history + tools schema to the LLM
       └─ final answer ──► printed to the user
 ```
 
-Configuration is read from `mcp_servers.json` at startup; no code changes are needed to add a new server or switch the LLM backend.
+Configuration is read from `mcp_servers_config.json` at startup; no code changes are needed to add a new server or switch the LLM backend.
 
 ## Files
 
@@ -33,7 +33,7 @@ Manages a single MCP server connection over stdio. `MCPClient` spawns the server
 
 ### [host.py](host.py)
 
-The central coordinator. `MCPHost` reads `mcp_servers.json`, instantiates the LLM provider and one `MCPClient` per configured server, and builds a namespaced tool registry (`servername__toolname`) so tool names stay unique across servers. `_turn()` implements the core agentic loop, and `run()` wraps it in an interactive REPL that also handles `/tools`, `/history`, `/reset`, and `/quit` commands.
+The central coordinator. `MCPHost` reads `mcp_servers_config.json`, instantiates the LLM provider and one `MCPClient` per configured server, and builds a namespaced tool registry (`servername__toolname`) so tool names stay unique across servers. `_turn()` implements the core agentic loop, and `run()` wraps it in an interactive REPL that also handles `/tools`, `/history`, `/reset`, and `/quit` commands.
 
 ### [llm_provider/](llm_provider/)
 
@@ -69,7 +69,7 @@ MCP server for read-only MySQL access over an SSH tunnel. Automatically opens an
 | `list_tables` | List all tables in a database. |
 | `describe_table` | Return column definitions (name, type, nullable, key, default, extra) for a table. |
 
-### [mcp_servers.json](mcp_servers.json)
+### [mcp_servers_config.json](mcp_servers_config.json)
 
 Runtime configuration file. The `llm` section sets the provider type, endpoint URL, model name, and the environment variable that holds the API key. The `mcpServers` section maps server names to their launch commands. Add a new entry here to connect any additional MCP-compatible server without touching Python code.
 
@@ -107,7 +107,7 @@ python host.py
 
 ### Switching LLM backends
 
-Edit the `llm` block in `mcp_servers.json` — no code changes required.
+Edit the `llm` block in `mcp_servers_config.json` — no code changes required.
 
 **Ollama** (default, local):
 ```json
@@ -218,7 +218,7 @@ The server opens an SSH tunnel automatically on startup and only allows read-onl
 ## Adding a new MCP server
 
 1. Write a FastMCP server (use [mcp_servers/sample_server.py](mcp_servers/sample_server.py) as a template).
-2. Add an entry to `mcp_servers.json`:
+2. Add an entry to `mcp_servers_config.json`:
 
 ```json
 "mcpServers": {
@@ -230,6 +230,6 @@ The server opens an SSH tunnel automatically on startup and only allows read-onl
 }
 ```
 
-> **Do not put real secrets in `mcp_servers.json`** — this file is committed to version control. Set secrets as environment variables (e.g. in `.env`) and read them in your server with `os.environ`.
+> **Do not put real secrets in `mcp_servers_config.json`** — this file is committed to version control. Set secrets as environment variables (e.g. in `.env`) and read them in your server with `os.environ`.
 
 No other code changes are needed. Tools are automatically namespaced as `myserver__toolname`.

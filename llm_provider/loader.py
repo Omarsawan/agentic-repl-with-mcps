@@ -7,7 +7,7 @@ from .openai_compatible import OpenAICompatibleProvider
 
 
 def build_provider(config: dict) -> LLMProvider:
-    """Construct an LLMProvider from the 'llm' section of mcp_servers.json.
+    """Construct an LLMProvider from the 'llm' section of mcp_servers_config.json.
 
     Supported provider types:
     - "openai_compatible" (default): uses OpenAICompatibleProvider.

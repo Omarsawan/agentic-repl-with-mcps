@@ -14,7 +14,7 @@ from llm_provider import LLMProvider, ToolCall, build_provider
 
 load_dotenv()
 
-CONFIG_FILE = Path(__file__).parent / "mcp_servers.json"
+CONFIG_FILE = Path(__file__).parent / "mcp_servers_config.json"
 
 _SYSTEM_ENV_KEYS = frozenset({})
 
@@ -47,7 +47,7 @@ class MCPHost:
     # ------------------------------------------------------------------
 
     async def _load(self, config_path: Path) -> None:
-        """Read mcp_servers.json, instantiate the LLM provider, and connect all MCP clients."""
+        """Read mcp_servers_config.json, instantiate the LLM provider, and connect all MCP clients."""
         with config_path.open() as f:
             config: dict = json.load(f)
 

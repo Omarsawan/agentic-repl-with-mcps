@@ -24,7 +24,7 @@ class LLMProvider(ABC):
     """Abstract base class for LLM backends.
 
     Subclass this to add a custom provider. The only method to implement is chat().
-    Instances are created by build_provider() based on the mcp_servers.json config;
+    Instances are created by build_provider() based on the mcp_servers_config.json config;
     any extra config keys are forwarded as constructor keyword arguments.
     """
 
