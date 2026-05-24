@@ -19,11 +19,5 @@ def get_time() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-@mcp.tool()
-def add(a: float, b: float) -> float:
-    """Add two numbers and return the result."""
-    return a + b
-
-
 if __name__ == "__main__":
     mcp.run(transport="stdio")
