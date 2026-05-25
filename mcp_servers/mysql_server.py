@@ -1,7 +1,6 @@
 """MCP server for MySQL access via an SSH tunnel."""
 
 import atexit
-import json
 import os
 import socket
 import subprocess
@@ -73,6 +72,23 @@ def _connect() -> pymysql.Connection:
     )
 
 
+def _format_table(rows: list[dict]) -> str:
+    if not rows:
+        return "(no rows returned)"
+    columns = list(rows[0].keys())
+    cell_rows = [
+        [str(row[col]) if row[col] is not None else "NULL" for col in columns]
+        for row in rows
+    ]
+    col_widths = [max(len(col), max(len(row[col_idx]) for row in cell_rows)) for col_idx, col in enumerate(columns)]
+    separator = "| " + " | ".join("-" * width for width in col_widths) + " |"
+    header = "| " + " | ".join(col.ljust(col_widths[col_idx]) for col_idx, col in enumerate(columns)) + " |"
+    lines = [header, separator]
+    for row in cell_rows:
+        lines.append("| " + " | ".join(cell.ljust(col_widths[col_idx]) for col_idx, cell in enumerate(row)) + " |")
+    return "\n".join(lines)
+
+
 def _is_select(sql: str) -> bool:
     first = sql.strip().split()[0].upper()
     return first in {"SELECT", "SHOW", "EXPLAIN", "DESCRIBE", "DESC", "WITH"}
@@ -80,13 +96,13 @@ def _is_select(sql: str) -> bool:
 
 @mcp.tool()
 def execute_query(sql: str, database: str | None = None, limit: int = 100) -> str:
-    """Execute a read-only SQL query and return results as JSON.
+    """Execute a read-only SQL query and return results as a formatted table.
 
     Only SELECT, SHOW, EXPLAIN, DESCRIBE, and WITH statements are allowed.
     At most `limit` rows are returned (default 100, max 1000).
     """
     if not _is_select(sql):
-        return json.dumps({"error": "Only read-only queries (SELECT/SHOW/EXPLAIN/DESCRIBE/WITH) are allowed."})
+        return "error: Only read-only queries (SELECT/SHOW/EXPLAIN/DESCRIBE/WITH) are allowed."
 
     limit = min(max(1, limit), 1000)
 
@@ -98,14 +114,14 @@ def execute_query(sql: str, database: str | None = None, limit: int = 100) -> st
                     cur.execute("USE `%s`" % database.replace("`", ""))
                 cur.execute(sql)
                 rows = cur.fetchmany(limit)
-        return json.dumps(rows, default=str)
+        return f"{len(rows)} row(s)\n\n{_format_table(rows)}"
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
-            return json.dumps({"error": f"Connection error (code {code})"})
-        return json.dumps({"error": str(exc)})
+            return f"error: Connection error (code {code})"
+        return f"error: {exc}"
     except Exception:
-        return json.dumps({"error": "Server error"})
+        return "error: Server error"
 
 
 @mcp.tool()
@@ -120,14 +136,14 @@ def list_tables(database: str | None = None) -> str:
                 cur.execute("SHOW TABLES")
                 rows = cur.fetchall()
         tables = [list(row.values())[0] for row in rows]
-        return json.dumps(tables)
+        return "\n".join(tables)
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
-            return json.dumps({"error": f"Connection error (code {code})"})
-        return json.dumps({"error": str(exc)})
+            return f"error: Connection error (code {code})"
+        return f"error: {exc}"
     except Exception:
-        return json.dumps({"error": "Server error"})
+        return "error: Server error"
 
 
 @mcp.tool()
@@ -141,14 +157,14 @@ def describe_table(table: str, database: str | None = None) -> str:
                     cur.execute("USE `%s`" % database.replace("`", ""))
                 cur.execute("DESCRIBE `%s`" % table.replace("`", ""))
                 rows = cur.fetchall()
-        return json.dumps(rows, default=str)
+        return _format_table(rows)
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
-            return json.dumps({"error": f"Connection error (code {code})"})
-        return json.dumps({"error": str(exc)})
+            return f"error: Connection error (code {code})"
+        return f"error: {exc}"
     except Exception:
-        return json.dumps({"error": "Server error"})
+        return "error: Server error"
 
 
 if __name__ == "__main__":
