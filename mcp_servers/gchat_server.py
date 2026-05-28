@@ -100,7 +100,7 @@ def _format_thread(thread_name: str, messages: list) -> str:
 
 
 @mcp.tool()
-def send_message(space_or_webhook: str, text: str) -> str:
+def send_message(text: str, space_or_webhook: str = "default") -> str:
     """Send a message to a Google Chat space or webhook.
 
     Pass 'default' to use the GCHAT_WEBHOOK_URL env var (no Service Account needed).
