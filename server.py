@@ -1,5 +1,4 @@
 """FastAPI web server that exposes MCPHost as a chat UI."""
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -32,7 +31,7 @@ def make_app(host) -> FastAPI:
                 if not content:
                     continue
                 try:
-                    await host._turn(content, emit=ws.send_json)
+                    await host.handle_input(content, emit=ws.send_json)
                 except Exception as exc:
                     await ws.send_json({"type": "error", "message": str(exc)})
         except WebSocketDisconnect:

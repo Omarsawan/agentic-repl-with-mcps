@@ -198,53 +198,94 @@ class MCPHost:
     # REPL
     # ------------------------------------------------------------------
 
-    def _print_history(self) -> None:
-        """Print the conversation history."""
+    def _format_history(self) -> str:
         if not self._history:
-            print("No history yet.")
-            return
-        print()
+            return "No history yet."
+        lines = []
         for msg in self._history:
             role = msg["role"].capitalize()
             if msg["role"] == "tool":
-                print(f"  [Tool result id={msg.get('tool_call_id', '')}] {msg['content'][:200]}")
+                lines.append(f"  [Tool result id={msg.get('tool_call_id', '')}] {msg['content'][:200]}")
             elif msg["role"] == "assistant" and msg.get("tool_calls"):
                 calls = ", ".join(tc["function"]["name"] for tc in msg["tool_calls"])
-                print(f"  {role}: <tool calls: {calls}>")
+                lines.append(f"  {role}: <tool calls: {calls}>")
             else:
-                print(f"  {role}: {msg.get('content', '')}")
-        print()
+                lines.append(f"  {role}: {msg.get('content', '')}")
+        return "\n".join(lines)
 
-    def _print_tools(self) -> None:
-        """Print all available tools with their descriptions."""
+    def _format_tools(self) -> str:
         if not self._tool_index:
-            print("No tools available.")
-            return
-        print("\nAvailable tools:")
-        for namespaced, (_, original) in self._tool_index.items():
-            server = namespaced.split("__")[0]
+            return "No tools available."
+        lines = ["Available tools:"]
+        for namespaced in self._tool_index:
             schema = next(
                 (s["function"] for s in self._tools_schema if s["function"]["name"] == namespaced), {}
             )
             desc = schema.get("description", "")
-            print(f"  {namespaced:<40} {desc}")
-        print()
+            lines.append(f"  {namespaced:<40} {desc}")
+        return "\n".join(lines)
 
-    def _print_custom_commands(self) -> None:
-        """Print all custom commands loaded from custom_commands.json."""
+    def _format_custom_commands(self) -> str:
         if not self._custom_commands:
-            print("No custom commands loaded. Add them to custom_commands.json.")
-            return
-        print("\nCustom commands (from custom_commands.json):")
+            return "No custom commands loaded. Add them to custom_commands.json."
+        lines = ["Custom commands (from custom_commands.json):"]
         for name, meta in self._custom_commands.items():
-            print(f"  /{name:<20} — {meta.get('description', '(no description)')}")
-        print()
+            lines.append(f"  /{name:<20} — {meta.get('description', '(no description)')}")
+        return "\n".join(lines)
 
-    def _print_help(self) -> None:
-        """Print built-in commands followed by any custom commands from custom_commands.json."""
-        print()
-        print(_BUILTIN_HELP)
-        self._print_custom_commands()
+    def _format_help(self) -> str:
+        return _BUILTIN_HELP + "\n" + self._format_custom_commands()
+
+    async def handle_input(
+        self,
+        content: str,
+        emit: Callable[[dict], Coroutine] | None = None,
+    ) -> None:
+        """Dispatch user input: handle built-in/custom commands or run an agent turn."""
+
+        async def send_text(text: str) -> None:
+            if emit:
+                await emit({"type": "assistant", "content": text})
+            else:
+                print(text)
+
+        async def send_system(msg: str) -> None:
+            if emit:
+                await emit({"type": "system", "message": msg})
+            else:
+                print(msg)
+
+        async def send_error(msg: str) -> None:
+            if emit:
+                await emit({"type": "error", "message": msg})
+            else:
+                print(msg)
+
+        if content == "/history":
+            await send_text(self._format_history())
+            return
+        if content == "/reset":
+            self._history.clear()
+            await send_system("History cleared.")
+            return
+        if content == "/tools":
+            await send_text(self._format_tools())
+            return
+        if content in ("/help", "help"):
+            await send_text(self._format_help())
+            return
+        if content == "/commands":
+            await send_text(self._format_custom_commands())
+            return
+        if content.startswith("/"):
+            cmd_name = content[1:]
+            if cmd_name in self._custom_commands:
+                await self._turn(self._custom_commands[cmd_name]["prompt"], emit=emit)
+            else:
+                await send_error(f"Unknown command: {content}. Type /help for available commands.")
+            return
+
+        await self._turn(content, emit=emit)
 
     async def _read_input(self, prompt: str) -> str:
         """Read a line of user input without blocking the event loop."""
@@ -270,32 +311,7 @@ class MCPHost:
                 if line in ("/quit", "/exit", "quit", "exit"):
                     print("Goodbye.")
                     break
-                if line == "/history":
-                    self._print_history()
-                    continue
-                if line == "/reset":
-                    self._history.clear()
-                    print("History cleared.")
-                    continue
-                if line == "/tools":
-                    self._print_tools()
-                    continue
-                if line in ("/help", "help"):
-                    self._print_help()
-                    continue
-                if line == "/commands":
-                    self._print_custom_commands()
-                    continue
-
-                if line.startswith("/"):
-                    cmd_name = line[1:]
-                    if cmd_name in self._custom_commands:
-                        await self._turn(self._custom_commands[cmd_name]["prompt"])
-                    else:
-                        print(f"Unknown command: {line}. Type /help for available commands.")
-                    continue
-
-                await self._turn(line)
+                await self.handle_input(line)
         finally:
             await self._exit_stack.aclose()
 
