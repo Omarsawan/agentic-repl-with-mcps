@@ -11,16 +11,10 @@
       "allowedEnv": [],
       "env": {}
     },
-    "temporal": {
+    "gchat": {
       "command": "python",
-      "args": ["mcp_servers/temporal_server.py"],
-      "allowedEnv": [
-        "TEMPORAL_ADDRESS",
-        "TEMPORAL_NAMESPACE",
-        "TEMPORAL_TLS_CERT",
-        "TEMPORAL_TLS_KEY",
-        "TEMPORAL_UI_BASE_URL"
-      ],
+      "args": ["mcp_servers/gchat_server.py"],
+      "allowedEnv": ["GCHAT_WEBHOOK_URL", "GCHAT_SERVICE_ACCOUNT_JSON"],
       "env": {}
     },
     "mysql": {
