@@ -24,3 +24,4 @@ certs/
 *.p12
 *.pfx
 *.pub
+uv.lock
