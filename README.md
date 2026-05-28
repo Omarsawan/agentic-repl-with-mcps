@@ -25,6 +25,42 @@ AgentProvider.chat()     ← sends history + tools schema to the LLM
 
 Configuration is read from `mcp_servers_config.json` at startup; no code changes are needed to add a new server or switch the LLM backend.
 
+### Web UI architecture
+
+When `--web` is passed, `MCPHost.run_web()` creates a FastAPI app via `server.make_app()` and hands it to uvicorn, which drives the asyncio event loop directly — no separate thread is needed.
+
+```
+Browser
+   │  HTTP GET /          → serves static/index.html
+   │  POST /reset         → clears conversation history
+   │  WebSocket /ws
+   │       │
+   │       │  { "content": "..." }          (client → server)
+   │       │
+   │       ▼
+   │  server.ws_endpoint()
+   │       │
+   │       ▼
+   │  MCPHost._turn(content, emit=ws.send_json)
+   │       │                                 │
+   │       ▼                                 │
+   │  (same agentic loop as REPL)            │
+   │       │                                 │
+   │       └─ tool call / final answer ──────►  { "type": "...", ... }  (server → client)
+   │
+uvicorn (asyncio event loop)
+```
+
+Each browser message triggers one full agentic turn. The `emit` callback streams JSON events back over the same WebSocket connection as the turn progresses — tool call arguments, tool results, and the final assistant message are all sent incrementally as separate events. The WebSocket stays open between turns so the conversation history is maintained on the server.
+
+**Key files:**
+
+| File | Role |
+|------|------|
+| [host.py:303](host.py#L303) `MCPHost.run_web()` | Builds the FastAPI app, configures uvicorn, and starts the server |
+| [server.py](server.py) `make_app()` | Defines the three routes (`GET /`, `POST /reset`, `WS /ws`) and wires them to the host |
+| [static/index.html](static/index.html) | Single-page chat UI served at `/` |
+
 ## Files
 
 ### [mcp_client.py](mcp_client.py)
