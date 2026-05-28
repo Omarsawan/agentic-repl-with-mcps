@@ -59,6 +59,18 @@ MCP server for querying **Temporal Cloud** workflows. Connects via mTLS and expo
 | `list_workflows` | Search workflows using [Temporal's Workflow Query Language (WQL)](#temporal-wql-reference). Returns ID, run ID, type, status, start/close times, and task queue for each match. |
 | `describe_workflow` | Get full details for a specific workflow. Accepts a `workflow_id`, a `run_id`, or both. If only a `run_id` is given, the workflow ID is resolved automatically. |
 
+### [mcp_servers/gchat_server.py](mcp_servers/gchat_server.py)
+
+MCP server for sending and reading messages in **Google Chat**. Supports two auth modes simultaneously — configure just a webhook URL for simple sending, or add a Service Account key to unlock all tools.
+
+| Tool | Auth required | Description |
+|------|---------------|-------------|
+| `send_message` | Webhook URL or Service Account | Send a message to a space or webhook. Pass `"default"` to use `GCHAT_WEBHOOK_URL`. |
+| `send_thread_reply` | Service Account | Reply to a specific message thread. |
+| `list_spaces` | Service Account | List spaces the bot belongs to. |
+| `summarize_thread` | Service Account | Fetch thread messages so the LLM can summarize them. |
+| `suggest_reply` | Service Account | Fetch thread messages so the LLM can suggest an appropriate reply. |
+
 ### [mcp_servers/mysql_server.py](mcp_servers/mysql_server.py)
 
 MCP server for read-only MySQL access over an SSH tunnel. Automatically opens an SSH port-forward on startup and exposes three tools:
@@ -90,20 +102,38 @@ cp .env.example .env
 # Pull and serve a model with Ollama
 ollama pull qwen2.5:7b
 ollama serve          # starts the API at http://localhost:11434
-
-# Run the REPL
-uv run python host.py
-
-# Optional: pass a custom config file
-uv run python host.py path/to/my_config.json
 ```
 
 If you prefer plain pip (Python 3.12+ required):
 
 ```bash
 pip install -e .
-python host.py
 ```
+
+## Running
+
+### Terminal REPL
+
+```bash
+uv run python host.py
+
+# Optional: pass a custom config file
+uv run python host.py path/to/my_config.json
+```
+
+### Web UI
+
+```bash
+uv run python host.py --web
+
+# Custom port
+uv run python host.py --web --port 8080
+
+# Custom config + custom port
+uv run python host.py --web --port 8080 path/to/my_config.json
+```
+
+Then open `http://localhost:8000` (or whichever port you chose) in your browser. The web UI shows chat bubbles for user and assistant messages, collapsible tool call blocks with arguments and results, and a **Reset** button to clear the conversation history.
 
 ### Switching LLM backends
 
@@ -214,6 +244,50 @@ Set the following environment variables before running (see `.env.example`):
 | `MYSQL_DATABASE` | Default database (optional) |
 
 The server opens an SSH tunnel automatically on startup and only allows read-only queries (`SELECT`, `SHOW`, `EXPLAIN`, `DESCRIBE`, `WITH`).
+
+## Google Chat setup
+
+### Webhook-only (quick start — enables `send_message` only)
+
+1. Open a Google Chat space → **Apps & integrations** → **Webhooks** → **Add webhook**.
+2. Copy the generated webhook URL.
+3. Add it to your `.env`:
+
+```
+GCHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/.../messages?key=...&token=...
+```
+
+Then call `gchat__send_message` with `space_or_webhook="default"`.
+
+### Service Account (enables all tools)
+
+To use `send_thread_reply`, `list_spaces`, `summarize_thread`, and `suggest_reply`:
+
+1. In [Google Cloud Console](https://console.cloud.google.com), create or select a project and enable the **Google Chat API**.
+2. Go to **IAM & Admin → Service Accounts** → create a service account → download the JSON key.
+3. In the [Google Chat API configuration](https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat), create a **Chat app** linked to the service account email.
+4. Invite the bot to each target space (type `@<bot-name>` in the space and confirm).
+5. Set the key path in your `.env`:
+
+```
+GCHAT_SERVICE_ACCOUNT_JSON=/path/to/service-account-key.json
+```
+
+No code changes needed — the server detects the env var at startup and unlocks all tools automatically.
+
+| Variable | Description |
+|----------|-------------|
+| `GCHAT_WEBHOOK_URL` | Incoming webhook URL from a Chat space (webhook mode) |
+| `GCHAT_SERVICE_ACCOUNT_JSON` | Path to the GCP Service Account JSON key file (full REST API access) |
+
+Space and thread name formats used by the REST API tools:
+
+| Identifier | Format |
+|------------|--------|
+| `space` | `spaces/SPACE_ID` |
+| `thread_name` | `spaces/SPACE_ID/threads/THREAD_ID` |
+
+Run `gchat__list_spaces` to discover `SPACE_ID` values once the bot is configured.
 
 ## Adding a new MCP server
 
