@@ -5,12 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MCP Agent</title>
   <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme');
+      document.documentElement.dataset.theme = saved || 'dark';
+    })();
+  </script>
   <style>
+    :root {
+      --bg-page:         #f0f2f5;
+      --bg-surface:      #fff;
+      --bg-surface-alt:  #f9fafb;
+      --bg-code:         #f3f4f6;
+      --bg-tool-pre:     #fafaf9;
+      --bg-user-avatar:  #dbeafe;
+      --bg-avatar:       #e5e7eb;
+      --bg-error:        #fef2f2;
+      --border:          #e5e7eb;
+      --border-input:    #d1d5db;
+      --border-error:    #fca5a5;
+      --border-tool-pre: #e7e5e4;
+      --text-primary:    #111827;
+      --text-secondary:  #374151;
+      --text-muted:      #6b7280;
+      --text-faint:      #9ca3af;
+      --text-tool:       #92400e;
+      --text-tool-pre:   #1c1917;
+      --accent:          #2563eb;
+      --accent-hover:    #1d4ed8;
+      --accent-disabled: #93c5fd;
+      --accent-tool:     #f59e0b;
+      --table-th-bg:     #f9fafb;
+    }
+
+    html[data-theme="dark"] {
+      --bg-page:         #0f1117;
+      --bg-surface:      #1a1d24;
+      --bg-surface-alt:  #22262f;
+      --bg-code:         #1e2027;
+      --bg-tool-pre:     #1a1d24;
+      --bg-user-avatar:  #1e3a5f;
+      --bg-avatar:       #2d3140;
+      --bg-error:        #2d1515;
+      --border:          #2d3140;
+      --border-input:    #3a3f50;
+      --border-error:    #7f1d1d;
+      --border-tool-pre: #2d2c2b;
+      --text-primary:    #e5e7eb;
+      --text-secondary:  #d1d5db;
+      --text-muted:      #9ca3af;
+      --text-faint:      #6b7280;
+      --text-tool:       #fbbf24;
+      --text-tool-pre:   #e7e5e4;
+      --accent:          #3b82f6;
+      --accent-hover:    #2563eb;
+      --accent-disabled: #1e3a5f;
+      --accent-tool:     #f59e0b;
+      --table-th-bg:     #22262f;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f0f2f5;
+      background: var(--bg-page);
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -22,27 +80,27 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 20px;
-      background: #fff;
-      border-bottom: 1px solid #e5e7eb;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    header h1 { font-size: 16px; font-weight: 600; color: #111827; }
-    header h1 span { color: #6b7280; font-weight: 400; font-size: 13px; margin-left: 8px; }
+    header h1 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+    header h1 span { color: var(--text-muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
 
     .header-actions { display: flex; gap: 8px; }
     .btn {
       padding: 6px 14px;
       border-radius: 6px;
-      border: 1px solid #d1d5db;
-      background: #fff;
+      border: 1px solid var(--border-input);
+      background: var(--bg-surface);
       font-size: 13px;
       cursor: pointer;
-      color: #374151;
+      color: var(--text-secondary);
       transition: background 0.15s;
     }
-    .btn:hover { background: #f9fafb; }
-    .btn-danger { color: #dc2626; border-color: #fca5a5; }
-    .btn-danger:hover { background: #fef2f2; }
+    .btn:hover { background: var(--bg-surface-alt); }
+    .btn-danger { color: #dc2626; border-color: var(--border-error); }
+    .btn-danger:hover { background: var(--bg-error); }
 
     /* ── Chat area ── */
     #chat {
@@ -73,9 +131,9 @@
       align-items: center;
       justify-content: center;
       font-size: 15px;
-      background: #e5e7eb;
+      background: var(--bg-avatar);
     }
-    .msg-row.user .avatar { background: #dbeafe; }
+    .msg-row.user .avatar { background: var(--bg-user-avatar); }
 
     .bubble {
       padding: 10px 14px;
@@ -86,14 +144,14 @@
       word-break: break-word;
     }
     .msg-row.user .bubble {
-      background: #2563eb;
+      background: var(--accent);
       color: #fff;
       border-bottom-right-radius: 4px;
     }
     .msg-row.assistant .bubble {
-      background: #fff;
-      color: #111827;
-      border: 1px solid #e5e7eb;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
       border-bottom-left-radius: 4px;
     }
 
@@ -101,7 +159,7 @@
     .bubble p { margin: 0 0 8px; }
     .bubble p:last-child { margin-bottom: 0; }
     .bubble pre {
-      background: #f3f4f6;
+      background: var(--bg-code);
       border-radius: 6px;
       padding: 10px 12px;
       overflow-x: auto;
@@ -109,7 +167,7 @@
       margin: 8px 0;
     }
     .bubble code {
-      background: #f3f4f6;
+      background: var(--bg-code);
       border-radius: 3px;
       padding: 1px 4px;
       font-size: 13px;
@@ -117,8 +175,8 @@
     .bubble pre code { background: none; padding: 0; }
     .bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
     .bubble table { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
-    .bubble th, .bubble td { border: 1px solid #d1d5db; padding: 4px 10px; }
-    .bubble th { background: #f9fafb; }
+    .bubble th, .bubble td { border: 1px solid var(--border-input); padding: 4px 10px; }
+    .bubble th { background: var(--table-th-bg); }
 
     /* ── Tool call block ── */
     .tool-block {
@@ -127,9 +185,9 @@
       width: 100%;
     }
     details.tool-details {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-left: 3px solid #f59e0b;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-tool);
       border-radius: 8px;
       overflow: hidden;
       font-size: 13px;
@@ -141,19 +199,19 @@
       align-items: center;
       gap: 8px;
       user-select: none;
-      color: #92400e;
+      color: var(--text-tool);
       font-weight: 500;
       list-style: none;
     }
     details.tool-details summary::-webkit-details-marker { display: none; }
     .tool-icon { font-size: 14px; }
     .tool-name { font-family: monospace; }
-    .tool-chevron { margin-left: auto; transition: transform 0.15s; color: #9ca3af; }
+    .tool-chevron { margin-left: auto; transition: transform 0.15s; color: var(--text-faint); }
     details[open] .tool-chevron { transform: rotate(90deg); }
     .spinner {
       width: 12px; height: 12px;
-      border: 2px solid #d1d5db;
-      border-top-color: #f59e0b;
+      border: 2px solid var(--border-input);
+      border-top-color: var(--accent-tool);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
       flex-shrink: 0;
@@ -162,17 +220,17 @@
 
     .tool-body { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 8px; }
     .tool-section { display: flex; flex-direction: column; gap: 4px; }
-    .tool-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+    .tool-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
     .tool-pre {
-      background: #fafaf9;
-      border: 1px solid #e7e5e4;
+      background: var(--bg-tool-pre);
+      border: 1px solid var(--border-tool-pre);
       border-radius: 5px;
       padding: 7px 10px;
       font-family: monospace;
       font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
-      color: #1c1917;
+      color: var(--text-tool-pre);
       max-height: 300px;
       overflow-y: auto;
     }
@@ -188,14 +246,14 @@
       display: flex;
       gap: 4px;
       padding: 10px 14px;
-      background: #fff;
-      border: 1px solid #e5e7eb;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
       border-radius: 12px;
       border-bottom-left-radius: 4px;
     }
     .thinking-dots span {
       width: 7px; height: 7px;
-      background: #9ca3af;
+      background: var(--text-faint);
       border-radius: 50%;
       animation: bounce 1.2s ease-in-out infinite;
     }
@@ -209,8 +267,8 @@
     /* ── Error message ── */
     .error-row {
       align-self: flex-start;
-      background: #fef2f2;
-      border: 1px solid #fca5a5;
+      background: var(--bg-error);
+      border: 1px solid var(--border-error);
       border-radius: 8px;
       padding: 9px 14px;
       font-size: 13px;
@@ -224,14 +282,14 @@
       align-items: flex-end;
       gap: 10px;
       padding: 12px 20px;
-      background: #fff;
-      border-top: 1px solid #e5e7eb;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
       flex-shrink: 0;
     }
     #input {
       flex: 1;
       padding: 10px 14px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-input);
       border-radius: 8px;
       font-size: 14px;
       resize: none;
@@ -240,12 +298,14 @@
       max-height: 160px;
       overflow-y: auto;
       transition: border-color 0.15s;
+      background: var(--bg-surface);
+      color: var(--text-primary);
     }
-    #input:focus { border-color: #2563eb; }
-    #input:disabled { background: #f9fafb; color: #9ca3af; }
+    #input:focus { border-color: var(--accent); }
+    #input:disabled { background: var(--bg-surface-alt); color: var(--text-faint); }
     #send-btn {
       padding: 10px 18px;
-      background: #2563eb;
+      background: var(--accent);
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -255,8 +315,8 @@
       transition: background 0.15s;
       white-space: nowrap;
     }
-    #send-btn:hover:not(:disabled) { background: #1d4ed8; }
-    #send-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+    #send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    #send-btn:disabled { background: var(--accent-disabled); cursor: not-allowed; }
 
     /* ── Empty state ── */
     .empty-state {
@@ -265,7 +325,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #9ca3af;
+      color: var(--text-faint);
       gap: 8px;
       pointer-events: none;
     }
@@ -278,6 +338,7 @@
 <header>
   <h1>MCP Agent <span id="tool-count"></span></h1>
   <div class="header-actions">
+    <button class="btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <button class="btn btn-danger" onclick="resetChat()">Reset</button>
   </div>
 </header>
@@ -501,6 +562,20 @@
     pendingToolCalls = [];
     setInputEnabled(true);
   }
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+    html.dataset.theme = next;
+    localStorage.setItem('theme', next);
+    document.getElementById('theme-btn').textContent = next === 'dark' ? '🌙' : '☀️';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
+  });
 </script>
 </body>
 </html>
