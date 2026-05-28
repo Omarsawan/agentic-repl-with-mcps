@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Agent</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 16px; font-weight: 600; color: #111827; }
+    header h1 span { color: #6b7280; font-weight: 400; font-size: 13px; margin-left: 8px; }
+
+    .header-actions { display: flex; gap: 8px; }
+    .btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      color: #374151;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #f9fafb; }
+    .btn-danger { color: #dc2626; border-color: #fca5a5; }
+    .btn-danger:hover { background: #fef2f2; }
+
+    /* ── Chat area ── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Message rows ── */
+    .msg-row {
+      display: flex;
+      gap: 10px;
+      max-width: 780px;
+      width: 100%;
+    }
+    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-row.assistant { align-self: flex-start; }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      background: #e5e7eb;
+    }
+    .msg-row.user .avatar { background: #dbeafe; }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.55;
+      font-size: 14px;
+      max-width: 640px;
+      word-break: break-word;
+    }
+    .msg-row.user .bubble {
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg-row.assistant .bubble {
+      background: #fff;
+      color: #111827;
+      border: 1px solid #e5e7eb;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* markdown inside assistant bubble */
+    .bubble p { margin: 0 0 8px; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble pre {
+      background: #f3f4f6;
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+    .bubble code {
+      background: #f3f4f6;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 13px;
+    }
+    .bubble pre code { background: none; padding: 0; }
+    .bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
+    .bubble table { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+    .bubble th, .bubble td { border: 1px solid #d1d5db; padding: 4px 10px; }
+    .bubble th { background: #f9fafb; }
+
+    /* ── Tool call block ── */
+    .tool-block {
+      align-self: flex-start;
+      max-width: 680px;
+      width: 100%;
+    }
+    details.tool-details {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-left: 3px solid #f59e0b;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    details.tool-details summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+      color: #92400e;
+      font-weight: 500;
+      list-style: none;
+    }
+    details.tool-details summary::-webkit-details-marker { display: none; }
+    .tool-icon { font-size: 14px; }
+    .tool-name { font-family: monospace; }
+    .tool-chevron { margin-left: auto; transition: transform 0.15s; color: #9ca3af; }
+    details[open] .tool-chevron { transform: rotate(90deg); }
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid #d1d5db;
+      border-top-color: #f59e0b;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .tool-body { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+    .tool-section { display: flex; flex-direction: column; gap: 4px; }
+    .tool-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+    .tool-pre {
+      background: #fafaf9;
+      border: 1px solid #e7e5e4;
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #1c1917;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* ── Thinking indicator ── */
+    .thinking-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      align-self: flex-start;
+    }
+    .thinking-dots {
+      display: flex;
+      gap: 4px;
+      padding: 10px 14px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      border-bottom-left-radius: 4px;
+    }
+    .thinking-dots span {
+      width: 7px; height: 7px;
+      background: #9ca3af;
+      border-radius: 50%;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-5px); }
+    }
+
+    /* ── Error message ── */
+    .error-row {
+      align-self: flex-start;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      color: #dc2626;
+      max-width: 680px;
+    }
+
+    /* ── Input area ── */
+    footer {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 12px 20px;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    #input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      line-height: 1.5;
+      max-height: 160px;
+      overflow-y: auto;
+      transition: border-color 0.15s;
+    }
+    #input:focus { border-color: #2563eb; }
+    #input:disabled { background: #f9fafb; color: #9ca3af; }
+    #send-btn {
+      padding: 10px 18px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    #send-btn:hover:not(:disabled) { background: #1d4ed8; }
+    #send-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .empty-state .icon { font-size: 40px; }
+    .empty-state p { font-size: 15px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>MCP Agent <span id="tool-count"></span></h1>
+  <div class="header-actions">
+    <button class="btn btn-danger" onclick="resetChat()">Reset</button>
+  </div>
+</header>
+
+<div id="chat">
+  <div class="empty-state" id="empty-state">
+    <div class="icon">🤖</div>
+    <p>Send a message to get started</p>
+  </div>
+</div>
+
+<footer>
+  <textarea id="input" rows="1" placeholder="Type a message…" autofocus></textarea>
+  <button id="send-btn" onclick="sendMessage()">Send</button>
+</footer>
+
+<script>
+  marked.setOptions({ breaks: true, gfm: true });
+
+  const chatEl = document.getElementById('chat');
+  const inputEl = document.getElementById('input');
+  const sendBtn = document.getElementById('send-btn');
+  const emptyState = document.getElementById('empty-state');
+
+  // ── WebSocket ────────────────────────────────────────────────────────────
+  const wsUrl = `ws://${window.location.host}/ws`;
+  let ws;
+  let pendingToolCalls = [];
+  let thinkingEl = null;
+
+  function connect() {
+    ws = new WebSocket(wsUrl);
+    ws.onmessage = (e) => handleEvent(JSON.parse(e.data));
+    ws.onclose = () => setTimeout(connect, 2000);
+  }
+  connect();
+
+  // ── Event handler ────────────────────────────────────────────────────────
+  function handleEvent(event) {
+    if (event.type === 'tool_call') {
+      removeThinking();
+      const el = addToolCall(event.name, event.args);
+      pendingToolCalls.push(el);
+    } else if (event.type === 'tool_result') {
+      const el = pendingToolCalls.shift();
+      if (el) setToolResult(el, event.result);
+      addThinking();
+    } else if (event.type === 'assistant') {
+      removeThinking();
+      addMessage('assistant', event.content);
+      setInputEnabled(true);
+    } else if (event.type === 'error') {
+      removeThinking();
+      addError(event.message);
+      setInputEnabled(true);
+    }
+  }
+
+  // ── DOM helpers ──────────────────────────────────────────────────────────
+  function hideEmpty() {
+    emptyState.style.display = 'none';
+  }
+
+  function addMessage(role, text) {
+    hideEmpty();
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? '🧑' : '🤖';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if (role === 'user') {
+      bubble.textContent = text;
+    } else {
+      bubble.innerHTML = marked.parse(text);
+    }
+
+    row.append(avatar, bubble);
+    chatEl.appendChild(row);
+    scrollToBottom();
+    return row;
+  }
+
+  function addToolCall(name, args) {
+    hideEmpty();
+    const wrap = document.createElement('div');
+    wrap.className = 'tool-block';
+
+    const details = document.createElement('details');
+    details.className = 'tool-details';
+
+    const summary = document.createElement('summary');
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    spinner.dataset.spinner = '1';
+    summary.innerHTML = `<span class="tool-icon">⚙️</span><span class="tool-name">${escHtml(name)}</span>`;
+    summary.prepend(spinner);
+    const chevron = document.createElement('span');
+    chevron.className = 'tool-chevron';
+    chevron.textContent = '▶';
+    summary.appendChild(chevron);
+
+    const body = document.createElement('div');
+    body.className = 'tool-body';
+
+    if (args && Object.keys(args).length > 0) {
+      const sec = document.createElement('div');
+      sec.className = 'tool-section';
+      sec.innerHTML = `<span class="tool-label">Arguments</span><pre class="tool-pre">${escHtml(JSON.stringify(args, null, 2))}</pre>`;
+      body.appendChild(sec);
+    }
+
+    details.append(summary, body);
+    wrap.appendChild(details);
+    chatEl.appendChild(wrap);
+    scrollToBottom();
+    return wrap;
+  }
+
+  function setToolResult(wrap, result) {
+    const details = wrap.querySelector('details');
+    const body = details.querySelector('.tool-body');
+    const spinner = details.querySelector('[data-spinner]');
+    if (spinner) spinner.remove();
+
+    const sec = document.createElement('div');
+    sec.className = 'tool-section';
+    sec.innerHTML = `<span class="tool-label">Result</span><pre class="tool-pre">${escHtml(result)}</pre>`;
+    body.appendChild(sec);
+    scrollToBottom();
+  }
+
+  function addThinking() {
+    removeThinking();
+    const row = document.createElement('div');
+    row.className = 'thinking-row';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = '🤖';
+    const dots = document.createElement('div');
+    dots.className = 'thinking-dots';
+    dots.innerHTML = '<span></span><span></span><span></span>';
+    row.append(avatar, dots);
+    row.dataset.thinking = '1';
+    chatEl.appendChild(row);
+    thinkingEl = row;
+    scrollToBottom();
+  }
+
+  function removeThinking() {
+    if (thinkingEl) {
+      thinkingEl.remove();
+      thinkingEl = null;
+    }
+  }
+
+  function addError(msg) {
+    const el = document.createElement('div');
+    el.className = 'error-row';
+    el.textContent = `⚠️ ${msg}`;
+    chatEl.appendChild(el);
+    scrollToBottom();
+  }
+
+  function scrollToBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Input handling ───────────────────────────────────────────────────────
+  function setInputEnabled(enabled) {
+    inputEl.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+    if (enabled) inputEl.focus();
+  }
+
+  function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || inputEl.disabled) return;
+    inputEl.value = '';
+    autoResize();
+    addMessage('user', text);
+    addThinking();
+    setInputEnabled(false);
+    pendingToolCalls = [];
+    ws.send(JSON.stringify({ content: text }));
+  }
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  inputEl.addEventListener('input', autoResize);
+
+  function autoResize() {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  }
+
+  // ── Reset ────────────────────────────────────────────────────────────────
+  async function resetChat() {
+    await fetch('/reset', { method: 'POST' });
+    chatEl.innerHTML = '';
+    chatEl.appendChild(emptyState);
+    emptyState.style.display = '';
+    thinkingEl = null;
+    pendingToolCalls = [];
+    setInputEnabled(true);
+  }
+</script>
+</body>
+</html>

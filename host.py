@@ -1,9 +1,10 @@
 """Orchestrates multiple MCP clients and an LLM into an agentic REPL."""
+import argparse
 import asyncio
 import json
 import os
-import sys
 
+from collections.abc import Callable, Coroutine
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
@@ -100,22 +101,39 @@ class MCPHost:
     # Agent loop
     # ------------------------------------------------------------------
 
-    async def _dispatch_tool(self, call: ToolCall) -> str:
+    async def _dispatch_tool(
+        self,
+        call: ToolCall,
+        emit: Callable[[dict], Coroutine] | None = None,
+    ) -> str:
         """Route a tool call to the correct MCPClient and return the result as a string."""
         if call.name not in self._tool_index:
             return f"Error: unknown tool '{call.name}'"
         client, original_name = self._tool_index[call.name]
-        print(f"  → {call.name}({json.dumps(call.arguments, ensure_ascii=False)})")
+        if emit:
+            await emit({"type": "tool_call", "name": call.name, "args": call.arguments})
+        else:
+            print(f"  → {call.name}({json.dumps(call.arguments, ensure_ascii=False)})")
         try:
             result = str(await client.call_tool(original_name, call.arguments))
-            print(f"  ← {result[:200]}")
+            if emit:
+                await emit({"type": "tool_result", "name": call.name, "result": result})
+            else:
+                print(f"  ← {result[:200]}")
             return result
         except Exception as exc:
             error = f"Error: {exc}"
-            print(f"  ← {error}")
+            if emit:
+                await emit({"type": "tool_result", "name": call.name, "result": error})
+            else:
+                print(f"  ← {error}")
             return error
 
-    async def _turn(self, user_input: str) -> None:
+    async def _turn(
+        self,
+        user_input: str,
+        emit: Callable[[dict], Coroutine] | None = None,
+    ) -> None:
         """Run one conversation turn: call the LLM, execute any tool calls, loop until a final answer."""
         self._history.append({"role": "user", "content": user_input})
 
@@ -142,7 +160,7 @@ class MCPHost:
                 # Run each tool and append results
                 all_errors = True
                 for tc in response.tool_calls:
-                    result = await self._dispatch_tool(tc)
+                    result = await self._dispatch_tool(tc, emit=emit)
                     self._history.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
@@ -155,17 +173,26 @@ class MCPHost:
                     consecutive_errors += 1
                     if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                         last_error = self._history[-1]["content"]
-                        print(f"\n[Stopped] Tool kept failing after {consecutive_errors} attempts: {last_error}\n")
+                        if emit:
+                            await emit({"type": "error", "message": f"Stopped after {consecutive_errors} consecutive tool errors: {last_error}"})
+                        else:
+                            print(f"\n[Stopped] Tool kept failing after {consecutive_errors} attempts: {last_error}\n")
                         break
                 else:
                     consecutive_errors = 0
             else:
                 # Final answer
                 self._history.append({"role": "assistant", "content": response.content or ""})
-                print(f"\nAssistant: {response.content}\n")
+                if emit:
+                    await emit({"type": "assistant", "content": response.content or ""})
+                else:
+                    print(f"\nAssistant: {response.content}\n")
                 break
         else:
-            print(f"\n[Warning] Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer.\n")
+            if emit:
+                await emit({"type": "error", "message": f"Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer."})
+            else:
+                print(f"\n[Warning] Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer.\n")
 
     # ------------------------------------------------------------------
     # REPL
@@ -273,11 +300,38 @@ class MCPHost:
             await self._exit_stack.aclose()
 
 
+    async def run_web(self, config_path: Path = CONFIG_FILE, port: int = 8000) -> None:
+        """Load config, connect servers, then start the web UI on the given port."""
+        import uvicorn
+        from server import make_app
+
+        print(f"Loading config from {config_path} ...")
+        await self._load(config_path)
+        print(f"\nReady. {len(self._tool_index)} tool(s) loaded.")
+        print(f"Web UI starting at http://localhost:{port}\n")
+
+        app = make_app(self)
+        cfg = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+        server = uvicorn.Server(cfg)
+        try:
+            await server.serve()
+        finally:
+            await self._exit_stack.aclose()
+
+
 async def main() -> None:
-    """Parse an optional config path argument and run the MCPHost."""
-    config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else CONFIG_FILE
+    """Parse arguments and run the MCPHost in terminal or web mode."""
+    parser = argparse.ArgumentParser(description="MCP Agent REPL")
+    parser.add_argument("config", nargs="?", type=Path, default=CONFIG_FILE, help="Path to config JSON")
+    parser.add_argument("--web", action="store_true", help="Start web UI instead of terminal REPL")
+    parser.add_argument("--port", type=int, default=8000, help="Port for the web UI (default: 8000)")
+    args = parser.parse_args()
+
     host = MCPHost()
-    await host.run(config_path)
+    if args.web:
+        await host.run_web(args.config, port=args.port)
+    else:
+        await host.run(args.config)
 
 
 if __name__ == "__main__":
