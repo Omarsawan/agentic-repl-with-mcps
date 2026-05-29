@@ -276,6 +276,57 @@
       max-width: 680px;
     }
 
+    /* ── Inline argument input request ── */
+    .input-request {
+      align-self: flex-start;
+      max-width: 560px;
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-request-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .input-request-row {
+      display: flex;
+      gap: 8px;
+    }
+    .input-request-field {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      outline: none;
+    }
+    .input-request-field:focus { border-color: var(--accent); }
+    .input-request-submit {
+      padding: 7px 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .input-request-submit:hover { background: var(--accent-hover); }
+    .input-request-done {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
     /* ── Input area ── */
     footer {
       display: flex;
@@ -394,6 +445,13 @@
       removeThinking();
       addError(event.message);
       setInputEnabled(true);
+    } else if (event.type === 'input_announcement') {
+      removeThinking();
+      addMessage('assistant', event.content);
+    } else if (event.type === 'input_request') {
+      removeThinking();
+      setInputEnabled(false);
+      addInputRequest(event.prompt);
     }
   }
 
@@ -505,6 +563,51 @@
     el.textContent = `⚠️ ${msg}`;
     chatEl.appendChild(el);
     scrollToBottom();
+  }
+
+  function addInputRequest(promptText) {
+    hideEmpty();
+    const wrap = document.createElement('div');
+    wrap.className = 'input-request';
+
+    const label = document.createElement('div');
+    label.className = 'input-request-label';
+    label.textContent = promptText;
+
+    const row = document.createElement('div');
+    row.className = 'input-request-row';
+
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.className = 'input-request-field';
+    field.placeholder = 'Enter value…';
+
+    const btn = document.createElement('button');
+    btn.className = 'input-request-submit';
+    btn.textContent = 'Submit';
+
+    function submit() {
+      const value = field.value;
+      ws.send(JSON.stringify({ type: 'input_response', value }));
+      // Replace form with read-only display
+      row.remove();
+      const done = document.createElement('div');
+      done.className = 'input-request-done';
+      done.textContent = value.trim() ? `↳ ${value}` : '↳ (skipped)';
+      wrap.appendChild(done);
+      scrollToBottom();
+    }
+
+    btn.addEventListener('click', submit);
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+
+    row.append(field, btn);
+    wrap.append(label, row);
+    chatEl.appendChild(wrap);
+    scrollToBottom();
+    field.focus();
   }
 
   function scrollToBottom() {

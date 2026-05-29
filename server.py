@@ -1,4 +1,5 @@
 """FastAPI web server that exposes MCPHost as a chat UI."""
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -24,17 +25,49 @@ def make_app(host) -> FastAPI:
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
+
+        input_queue: asyncio.Queue[str] = asyncio.Queue()
+        # Strong refs required — asyncio only weakly references tasks and will GC (garbage collector)
+        # a suspended task before it resumes from input_queue.get().
+        active_tasks: set[asyncio.Task] = set()
+
+        async def emit(event: dict) -> None:
+            await ws.send_json(event)
+
+        async def prompt_fn(prompt: str, *, is_announcement: bool = False) -> str:
+            if is_announcement:
+                await emit({"type": "input_announcement", "content": prompt})
+                return ""
+            await emit({"type": "input_request", "prompt": prompt})
+            return await input_queue.get()
+
+        def spawn_turn(content: str) -> None:
+            async def _run() -> None:
+                try:
+                    await host.handle_input(content, emit=emit)
+                except Exception as exc:
+                    await emit({"type": "error", "message": str(exc)})
+
+            task = asyncio.create_task(_run())
+            active_tasks.add(task)
+            task.add_done_callback(active_tasks.discard)
+
+        host.set_prompt_fn(prompt_fn)
+
         try:
             while True:
                 data = await ws.receive_json()
-                content = data.get("content", "").strip()
-                if not content:
-                    continue
-                try:
-                    await host.handle_input(content, emit=ws.send_json)
-                except Exception as exc:
-                    await ws.send_json({"type": "error", "message": str(exc)})
+                if data.get("type") == "input_response":
+                    # "input_response" is sent by the browser when the user submits
+                    # a value via the inline argument-collection form. Route it back
+                    # to prompt_fn, which is suspended waiting on input_queue.get().
+                    await input_queue.put(data.get("value", ""))
+                elif content := data.get("content", "").strip():
+                    # process turn normally
+                    spawn_turn(content)
         except WebSocketDisconnect:
             pass
+        finally:
+            host.set_prompt_fn(None)
 
     return app

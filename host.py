@@ -46,6 +46,11 @@ class MCPHost:
         self._custom_commands: dict[str, dict] = {}
         self._exit_stack = AsyncExitStack()
 
+    def set_prompt_fn(self, fn) -> None:
+        """Set (or clear) the interactive prompt callback on the active provider."""
+        if self._provider is not None and hasattr(self._provider, "prompt_fn"):
+            self._provider.prompt_fn = fn
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
