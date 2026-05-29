@@ -90,7 +90,10 @@ def _format_table(rows: list[dict]) -> str:
 
 
 def _is_select(sql: str) -> bool:
-    first = sql.strip().split()[0].upper()
+    sql_normalized = sql.strip().split()
+    if any(kw in sql_normalized for kw in ('insert', 'update')):
+        return False
+    first = sql_normalized[0].upper()
     return first in {"SELECT", "SHOW", "EXPLAIN", "DESCRIBE", "DESC", "WITH"}
 
 

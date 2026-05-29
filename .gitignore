@@ -35,3 +35,4 @@ DerivedData/
 *.ipa
 *.dSYM
 *.dSYM.zip
+ios/*

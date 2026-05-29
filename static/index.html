@@ -599,13 +599,14 @@
     btn.textContent = 'Submit';
 
     function submit() {
-      const value = field.value;
+      const value = field.value;                                          // sent to server — no prefix
+      const displayText = value.trim() ? `↳ ${value}` : '↳ (skipped)'; // UI only
       ws.send(JSON.stringify({ type: EventType.INPUT_RESPONSE, value }));
       // Replace form with read-only display
       row.remove();
       const done = document.createElement('div');
       done.className = 'input-request-done';
-      done.textContent = value.trim() ? `↳ ${value}` : '↳ (skipped)';
+      done.textContent = displayText;
       wrap.appendChild(done);
       scrollToBottom();
     }

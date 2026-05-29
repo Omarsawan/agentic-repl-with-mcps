@@ -79,12 +79,12 @@ class KeywordMatchProvider(AgentProvider):
             return {}
 
         tool_name = tool_fn.get("name", "unknown")
-        announcement = self._build_announcement(tool_name, required, properties)
+        tool_info = self._build_tool_info(tool_name, required, properties)
 
         if self.notify_fn is not None:
-            await self.notify_fn(announcement)
+            await self.notify_fn(tool_info)
         else:
-            print(announcement)
+            print(tool_info)
 
         optional = [p for p in properties if p not in required]
         arguments: dict = {}
@@ -115,7 +115,7 @@ class KeywordMatchProvider(AgentProvider):
         return ""
 
     @staticmethod
-    def _build_announcement(tool_name: str, required: list[str], properties: dict) -> str:
+    def _build_tool_info(tool_name: str, required: list[str], properties: dict) -> str:
         lines = [f"Agent will use tool: **{tool_name}**", "This tool expects the following parameters:"]
         for name, prop in properties.items():
             ptype = prop.get("type", "any")
