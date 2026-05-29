@@ -15,8 +15,8 @@ class KeywordMatchProvider(AgentProvider):
     """
 
     def __init__(self) -> None:
-        # Set by the host when running in web mode; each value is called with a
-        # prompt string and must return the user's input as a string.
+        # Set by the host when running in web mode.
+        self.notify_fn: Callable[[str], Coroutine] | None = None
         self.prompt_fn: Callable[[str], Coroutine] | None = None
 
     async def chat(self, messages: list[dict], tools: list[dict]) -> ChatResponse:
@@ -81,8 +81,8 @@ class KeywordMatchProvider(AgentProvider):
         tool_name = tool_fn.get("name", "unknown")
         announcement = self._build_announcement(tool_name, required, properties)
 
-        if self.prompt_fn is not None:
-            await self.prompt_fn(announcement, is_announcement=True)
+        if self.notify_fn is not None:
+            await self.notify_fn(announcement)
         else:
             print(announcement)
 
@@ -107,7 +107,7 @@ class KeywordMatchProvider(AgentProvider):
 
     async def _ask(self, prompt: str) -> str:
         if self.prompt_fn is not None:
-            return await self.prompt_fn(prompt, is_announcement=False)
+            return await self.prompt_fn(prompt)
         if sys.stdin.isatty():
             return await asyncio.to_thread(input, prompt)
         # Non-interactive web context with no prompt_fn — shouldn't reach here,

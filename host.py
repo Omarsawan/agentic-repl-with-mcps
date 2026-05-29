@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from mcp_client import MCPClient
 from agent_provider import AgentProvider, ToolCall, build_provider
+from enums import EventType
 
 load_dotenv()
 
@@ -46,10 +47,13 @@ class MCPHost:
         self._custom_commands: dict[str, dict] = {}
         self._exit_stack = AsyncExitStack()
 
-    def set_prompt_fn(self, fn) -> None:
-        """Set (or clear) the interactive prompt callback on the active provider."""
-        if self._provider is not None and hasattr(self._provider, "prompt_fn"):
-            self._provider.prompt_fn = fn
+    def set_interaction_fns(self, notify_fn, prompt_fn) -> None:
+        """Set (or clear) the notify and prompt callbacks on the active provider."""
+        if self._provider is not None:
+            if hasattr(self._provider, "notify_fn"):
+                self._provider.notify_fn = notify_fn
+            if hasattr(self._provider, "prompt_fn"):
+                self._provider.prompt_fn = prompt_fn
 
     # ------------------------------------------------------------------
     # Setup
@@ -116,20 +120,20 @@ class MCPHost:
             return f"Error: unknown tool '{call.name}'"
         client, original_name = self._tool_index[call.name]
         if emit:
-            await emit({"type": "tool_call", "name": call.name, "args": call.arguments})
+            await emit({"type": EventType.TOOL_CALL, "name": call.name, "args": call.arguments})
         else:
             print(f"  → {call.name}({json.dumps(call.arguments, ensure_ascii=False)})")
         try:
             result = str(await client.call_tool(original_name, call.arguments))
             if emit:
-                await emit({"type": "tool_result", "name": call.name, "result": result})
+                await emit({"type": EventType.TOOL_RESULT, "name": call.name, "result": result})
             else:
                 print(f"  ← {result[:200]}")
             return result
         except Exception as exc:
             error = f"Error: {exc}"
             if emit:
-                await emit({"type": "tool_result", "name": call.name, "result": error})
+                await emit({"type": EventType.TOOL_RESULT, "name": call.name, "result": error})
             else:
                 print(f"  ← {error}")
             return error
@@ -179,7 +183,7 @@ class MCPHost:
                     if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                         last_error = self._history[-1]["content"]
                         if emit:
-                            await emit({"type": "error", "message": f"Stopped after {consecutive_errors} consecutive tool errors: {last_error}"})
+                            await emit({"type": EventType.ERROR, "message": f"Stopped after {consecutive_errors} consecutive tool errors: {last_error}"})
                         else:
                             print(f"\n[Stopped] Tool kept failing after {consecutive_errors} attempts: {last_error}\n")
                         break
@@ -189,13 +193,13 @@ class MCPHost:
                 # Final answer
                 self._history.append({"role": "assistant", "content": response.content or ""})
                 if emit:
-                    await emit({"type": "assistant", "content": response.content or ""})
+                    await emit({"type": EventType.ASSISTANT, "content": response.content or ""})
                 else:
                     print(f"\nAssistant: {response.content}\n")
                 break
         else:
             if emit:
-                await emit({"type": "error", "message": f"Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer."})
+                await emit({"type": EventType.ERROR, "message": f"Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer."})
             else:
                 print(f"\n[Warning] Reached {MAX_TOOL_ITERATIONS} tool iterations without a final answer.\n")
 
@@ -250,19 +254,19 @@ class MCPHost:
 
         async def send_text(text: str) -> None:
             if emit:
-                await emit({"type": "assistant", "content": text})
+                await emit({"type": EventType.ASSISTANT, "content": text})
             else:
                 print(text)
 
         async def send_system(msg: str) -> None:
             if emit:
-                await emit({"type": "system", "message": msg})
+                await emit({"type": EventType.SYSTEM, "message": msg})
             else:
                 print(msg)
 
         async def send_error(msg: str) -> None:
             if emit:
-                await emit({"type": "error", "message": msg})
+                await emit({"type": EventType.ERROR, "message": msg})
             else:
                 print(msg)
 

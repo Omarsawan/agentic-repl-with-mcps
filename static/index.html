@@ -414,6 +414,18 @@
   const sendBtn = document.getElementById('send-btn');
   const emptyState = document.getElementById('empty-state');
 
+  // ── Event type enum ──────────────────────────────────────────────────────
+  const EventType = Object.freeze({
+    AGENT_NOTIFICATION: 'agent_notification',
+    INPUT_PROMPT:   'input_prompt',
+    INPUT_RESPONSE: 'input_response',
+    TOOL_CALL:      'tool_call',
+    TOOL_RESULT:    'tool_result',
+    ASSISTANT:      'assistant',
+    ERROR:          'error',
+    SYSTEM:         'system',
+  });
+
   // ── WebSocket ────────────────────────────────────────────────────────────
   const wsUrl = `ws://${window.location.host}/ws`;
   let ws;
@@ -429,26 +441,26 @@
 
   // ── Event handler ────────────────────────────────────────────────────────
   function handleEvent(event) {
-    if (event.type === 'tool_call') {
+    if (event.type === EventType.TOOL_CALL) {
       removeThinking();
       const el = addToolCall(event.name, event.args);
       pendingToolCalls.push(el);
-    } else if (event.type === 'tool_result') {
+    } else if (event.type === EventType.TOOL_RESULT) {
       const el = pendingToolCalls.shift();
       if (el) setToolResult(el, event.result);
       addThinking();
-    } else if (event.type === 'assistant') {
+    } else if (event.type === EventType.ASSISTANT) {
       removeThinking();
       addMessage('assistant', event.content);
       setInputEnabled(true);
-    } else if (event.type === 'error') {
+    } else if (event.type === EventType.ERROR) {
       removeThinking();
       addError(event.message);
       setInputEnabled(true);
-    } else if (event.type === 'input_announcement') {
+    } else if (event.type === EventType.AGENT_NOTIFICATION) {
       removeThinking();
       addMessage('assistant', event.content);
-    } else if (event.type === 'input_request') {
+    } else if (event.type === EventType.INPUT_PROMPT) {
       removeThinking();
       setInputEnabled(false);
       addInputRequest(event.prompt);
@@ -588,7 +600,7 @@
 
     function submit() {
       const value = field.value;
-      ws.send(JSON.stringify({ type: 'input_response', value }));
+      ws.send(JSON.stringify({ type: EventType.INPUT_RESPONSE, value }));
       // Replace form with read-only display
       row.remove();
       const done = document.createElement('div');
