@@ -72,21 +72,31 @@ def _connect() -> pymysql.Connection:
     )
 
 
+_MAX_CELL = 60
+
+
+def _fmt_cell(val: object) -> str:
+    s = str(val) if val is not None else "NULL"
+    s = s.replace("\r", "").replace("\n", " ")
+    return s if len(s) <= _MAX_CELL else s[: _MAX_CELL - 3] + "..."
+
+
 def _format_table(rows: list[dict]) -> str:
     if not rows:
         return "(no rows returned)"
     columns = list(rows[0].keys())
-    cell_rows = [
-        [str(row[col]) if row[col] is not None else "NULL" for col in columns]
-        for row in rows
+    cell_rows = [[_fmt_cell(row[col]) for col in columns] for row in rows]
+    col_widths = [
+        max(3, len(col), max(len(r[i]) for r in cell_rows))
+        for i, col in enumerate(columns)
     ]
-    col_widths = [max(len(col), max(len(row[col_idx]) for row in cell_rows)) for col_idx, col in enumerate(columns)]
-    separator = "| " + " | ".join("-" * width for width in col_widths) + " |"
-    header = "| " + " | ".join(col.ljust(col_widths[col_idx]) for col_idx, col in enumerate(columns)) + " |"
-    lines = [header, separator]
+    divider = "+-" + "-+-".join("-" * w for w in col_widths) + "-+"
+    header = "| " + " | ".join(col.ljust(col_widths[i]) for i, col in enumerate(columns)) + " |"
+    lines = [divider, header, divider]
     for row in cell_rows:
-        lines.append("| " + " | ".join(cell.ljust(col_widths[col_idx]) for col_idx, cell in enumerate(row)) + " |")
-    return "\n".join(lines)
+        lines.append("| " + " | ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)) + " |")
+    lines.append(divider)
+    return "```\n" + "\n".join(lines) + "\n```"
 
 
 def _is_select(sql: str) -> bool:
