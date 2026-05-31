@@ -45,6 +45,34 @@ class GenericRoutingProvider(AgentProvider):
     ) -> None:
         self.handlers = handlers
         self.fallback_provider = fallback_provider
+        self._notify_fn = None
+        self._prompt_fn = None
+
+    @property
+    def notify_fn(self):
+        return self._notify_fn
+
+    @notify_fn.setter
+    def notify_fn(self, fn):
+        self._notify_fn = fn
+        if hasattr(self.fallback_provider, "notify_fn"):
+            self.fallback_provider.notify_fn = fn
+        for h in self.handlers:
+            if hasattr(h, "notify_fn"):
+                h.notify_fn = fn
+
+    @property
+    def prompt_fn(self):
+        return self._prompt_fn
+
+    @prompt_fn.setter
+    def prompt_fn(self, fn):
+        self._prompt_fn = fn
+        if hasattr(self.fallback_provider, "prompt_fn"):
+            self.fallback_provider.prompt_fn = fn
+        for h in self.handlers:
+            if hasattr(h, "prompt_fn"):
+                h.prompt_fn = fn
 
     async def chat(self, messages: list[dict], tools: list[dict]) -> ChatResponse:
         user_text = last_user_message(messages)
