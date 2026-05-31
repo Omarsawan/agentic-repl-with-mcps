@@ -1,4 +1,40 @@
-"""MCP server exposing Temporal Cloud workflow tools."""
+"""MCP server exposing Temporal Cloud workflow tools.
+
+Tools
+-----
+list_workflows    Search workflows using Workflow Query Language (WQL). Returns ID, run ID,
+                  type, status, start/close times, and task queue for each match.
+describe_workflow Get full details for a specific workflow. Accepts workflow_id, run_id, or both.
+                  If only a run_id is given, the workflow ID is resolved automatically.
+
+Setup
+-----
+Set the following environment variables (see .env.example):
+
+  TEMPORAL_ADDRESS    Cloud endpoint, e.g. myns.abc123.tmprl.cloud:7233
+  TEMPORAL_NAMESPACE  Namespace, e.g. myns.abc123
+  TEMPORAL_TLS_CERT   Path to your mTLS client certificate (PEM)
+  TEMPORAL_TLS_KEY    Path to your mTLS private key (PEM)
+
+WQL reference
+-------------
+The list_workflows tool accepts any valid Workflow Query Language expression:
+
+  WorkflowType = 'OrderWorkflow'
+  ExecutionStatus = 'Running'
+  WorkflowId = 'my-workflow-123'
+  RunId = 'abc-def-456'
+  StartTime BETWEEN '2024-01-01T00:00:00Z' AND '2024-12-31T23:59:59Z'
+  CloseTime > '2024-06-01T00:00:00Z'
+  WorkflowType = 'OrderWorkflow' AND ExecutionStatus = 'Completed'
+  ExecutionStatus = 'Running' AND TaskQueue = 'my-queue'
+
+Valid ExecutionStatus values: Running, Completed, Failed, Canceled, Terminated,
+ContinuedAsNew, TimedOut.
+
+Use > >= < <= = or BETWEEN ... AND ... for time comparisons. Timestamps must be
+ISO-8601, e.g. '2024-01-01T00:00:00Z'. Do NOT use AFTER, BEFORE, or SINCE.
+"""
 
 import os
 

@@ -1,4 +1,28 @@
-"""MCP server for MySQL access via an SSH tunnel."""
+"""MCP server for read-only MySQL access via an SSH tunnel.
+
+Tools
+-----
+execute_query   Run a read-only SQL statement (SELECT, SHOW, EXPLAIN, DESCRIBE, WITH)
+                and return results as JSON. At most `limit` rows returned (default 100).
+list_tables     List all tables in a database.
+describe_table  Return column definitions (name, type, nullable, key, default, extra).
+
+Setup
+-----
+Set the following environment variables (see .env.example):
+
+  MYSQL_SSH_HOST      Bastion / jump host hostname
+  MYSQL_SSH_PORT      SSH port (default 22)
+  MYSQL_SSH_USER      SSH username
+  MYSQL_SSH_KEY_PATH  Path to your SSH private key (e.g. ~/.ssh/id_rsa)
+  MYSQL_HOST          MySQL host as seen from the SSH server
+  MYSQL_PORT          MySQL port as seen from the SSH server
+  MYSQL_USER          MySQL username
+  MYSQL_PASSWORD      MySQL password
+  MYSQL_DATABASE      Default database (optional)
+
+The server opens an SSH tunnel automatically on startup.
+"""
 
 import atexit
 import json

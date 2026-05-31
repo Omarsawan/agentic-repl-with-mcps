@@ -1,3 +1,53 @@
+"""MCP server for sending and reading messages in Google Chat.
+
+Supports two auth modes simultaneously — configure just a webhook URL for simple
+sending, or add a Service Account key to unlock all tools.
+
+Tools
+-----
+send_message       Send a message to a space or webhook.
+                   Auth: Webhook URL or Service Account.
+send_thread_reply  Reply to a specific message thread.
+                   Auth: Service Account.
+list_spaces        List spaces the bot belongs to.
+                   Auth: Service Account.
+summarize_thread   Fetch thread messages so the LLM can summarize them.
+                   Auth: Service Account.
+suggest_reply      Fetch thread messages so the LLM can suggest an appropriate reply.
+                   Auth: Service Account.
+
+Setup — webhook only (enables send_message)
+-------------------------------------------
+1. Open a Google Chat space → Apps & integrations → Webhooks → Add webhook.
+2. Copy the generated webhook URL.
+3. Set in your .env:
+     GCHAT_WEBHOOK_URL=https://chat.googleapis.com/v1/spaces/.../messages?key=...&token=...
+
+Then call send_message with space_or_webhook="default".
+
+Setup — Service Account (enables all tools)
+-------------------------------------------
+1. In Google Cloud Console, create/select a project and enable the Google Chat API.
+2. Go to IAM & Admin → Service Accounts → create a service account → download JSON key.
+3. In the Google Chat API configuration, create a Chat app linked to the service account email.
+4. Invite the bot to each target space (type @<bot-name> in the space and confirm).
+5. Set in your .env:
+     GCHAT_SERVICE_ACCOUNT_JSON=/path/to/service-account-key.json
+
+The server detects the env var at startup and unlocks all tools automatically.
+
+Environment variables
+---------------------
+  GCHAT_WEBHOOK_URL           Incoming webhook URL (webhook mode)
+  GCHAT_SERVICE_ACCOUNT_JSON  Path to the GCP Service Account JSON key file
+
+Space and thread name formats
+-----------------------------
+  space        spaces/SPACE_ID
+  thread_name  spaces/SPACE_ID/threads/THREAD_ID
+
+Run list_spaces to discover SPACE_ID values once the bot is configured.
+"""
 import json
 import os
 
@@ -37,7 +87,7 @@ def _require_token() -> tuple[str | None, str | None]:
     if token is None:
         return None, (
             "Error: GCHAT_SERVICE_ACCOUNT_JSON is not configured. "
-            "See the 'Google Chat setup' section in README.md."
+            "See the module docstring in mcp_servers/gchat_server.py for setup instructions."
         )
     return token, None
 
