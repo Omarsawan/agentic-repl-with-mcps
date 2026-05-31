@@ -1,3 +1,4 @@
+import enum
 from enum import StrEnum
 
 
@@ -33,3 +34,21 @@ class EventType(StrEnum):
     SYSTEM = "system"
     """Server → client. An informational message from the host (e.g. 'History cleared').
     Currently not rendered in the UI but reserved for status feedback."""
+
+    SET_CONFIRM = "set_confirm"
+    """Bidirectional. Client → server to toggle the confirmation gate; server → client to
+    sync the current state (e.g. on initial connect or after a /confirm command)."""
+
+
+class SqlStep(enum.Enum):
+    FETCH_SCHEMA = "fetch_schema"
+    """Initial state. Emits a tool call to fetch INFORMATION_SCHEMA.
+    Transitions to DISPATCH_SQL once the schema tool result appears in messages."""
+
+    DISPATCH_SQL = "dispatch_sql"
+    """Schema is cached. Generates SQL from the user's question and emits a tool call
+    to execute it. Transitions to COLLECT_RESULT immediately after dispatch."""
+
+    COLLECT_RESULT = "collect_result"
+    """SQL dispatched. Waits for the execution result in message history.
+    Transitions back to DISPATCH_SQL after the result is retrieved and returned."""

@@ -36,3 +36,4 @@ DerivedData/
 *.dSYM
 *.dSYM.zip
 ios/*
+sql_model/checkpoints

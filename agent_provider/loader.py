@@ -7,11 +7,13 @@ from .openai_compatible import OpenAICompatibleProvider
 
 
 def build_provider(config: dict) -> AgentProvider:
-    """Construct an AgentProvider from the 'llm' section of mcp_servers_config.json.
+    """Construct an AgentProvider from the 'agent' section of mcp_servers_config.json.
 
     Supported provider types:
     - "openai_compatible" (default): uses OpenAICompatibleProvider.
     - "keyword_match": uses KeywordMatchProvider (no LLM required).
+    - "generic": uses GenericRoutingProvider with SQLHandler; routes prompts to the correct
+      handler based on classification, falls back to KeywordMatchProvider for unmatched prompts.
     - "custom": dynamically loads a AgentProvider subclass via _load_custom_provider().
     """
     provider_type = config.get("provider", "openai_compatible")
@@ -25,6 +27,15 @@ def build_provider(config: dict) -> AgentProvider:
 
     if provider_type == "keyword_match":
         return KeywordMatchProvider()
+
+    if provider_type == "generic":
+        from agent_provider.sql_handler import SQLHandler
+        from agent_provider.generic_routing import GenericRoutingProvider
+        sql_kwargs = {k: v for k, v in config.items() if k in {"checkpoint_path", "intent_confidence_threshold", "execute_query_tool"}}
+        return GenericRoutingProvider(
+            handlers=[SQLHandler(**sql_kwargs)],
+            fallback_provider=KeywordMatchProvider(),
+        )
 
     if provider_type == "custom":
         return _load_custom_provider(config)

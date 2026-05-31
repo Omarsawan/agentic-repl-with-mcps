@@ -1,9 +1,11 @@
 import asyncio
+import json
 import sys
 import uuid
 from typing import Callable, Coroutine
 
 from .base import AgentProvider, ChatResponse, ToolCall
+from .utils import last_user_message, format_table
 
 
 class KeywordMatchProvider(AgentProvider):
@@ -22,9 +24,14 @@ class KeywordMatchProvider(AgentProvider):
     async def chat(self, messages: list[dict], tools: list[dict]) -> ChatResponse:
         if messages and messages[-1].get("role") == "tool":
             result = messages[-1].get("content", "")
-            return ChatResponse(content=f"Result: {result}")
+            try:
+                rows = json.loads(result)
+                display = format_table(rows) if isinstance(rows, list) and rows and isinstance(rows[0], dict) else result
+            except (json.JSONDecodeError, TypeError):
+                display = result
+            return ChatResponse(content=f"Result:\n{display}")
 
-        query = self._last_user_message(messages)
+        query = last_user_message(messages)
         if not query or not tools:
             return ChatResponse(content="No matching tool found for your input.")
 
@@ -53,13 +60,6 @@ class KeywordMatchProvider(AgentProvider):
                 arguments=await self._extract_arguments(best_tool, query),
             )],
         )
-
-    @staticmethod
-    def _last_user_message(messages: list[dict]) -> str:
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                return str(msg.get("content", ""))
-        return ""
 
     async def _extract_arguments(self, tool_fn: dict, query: str) -> dict:
         params = tool_fn.get("parameters", {})

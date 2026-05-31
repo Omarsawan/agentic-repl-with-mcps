@@ -1,6 +1,7 @@
 """MCP server for MySQL access via an SSH tunnel."""
 
 import atexit
+import json
 import os
 import socket
 import subprocess
@@ -72,32 +73,6 @@ def _connect() -> pymysql.Connection:
     )
 
 
-_MAX_CELL = 60
-
-
-def _fmt_cell(val: object) -> str:
-    s = str(val) if val is not None else "NULL"
-    s = s.replace("\r", "").replace("\n", " ")
-    return s if len(s) <= _MAX_CELL else s[: _MAX_CELL - 3] + "..."
-
-
-def _format_table(rows: list[dict]) -> str:
-    if not rows:
-        return "(no rows returned)"
-    columns = list(rows[0].keys())
-    cell_rows = [[_fmt_cell(row[col]) for col in columns] for row in rows]
-    col_widths = [
-        max(3, len(col), max(len(r[i]) for r in cell_rows))
-        for i, col in enumerate(columns)
-    ]
-    divider = "+-" + "-+-".join("-" * w for w in col_widths) + "-+"
-    header = "| " + " | ".join(col.ljust(col_widths[i]) for i, col in enumerate(columns)) + " |"
-    lines = [divider, header, divider]
-    for row in cell_rows:
-        lines.append("| " + " | ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)) + " |")
-    lines.append(divider)
-    return "```\n" + "\n".join(lines) + "\n```"
-
 
 def _is_select(sql: str) -> bool:
     sql_normalized = sql.strip().split()
@@ -109,7 +84,7 @@ def _is_select(sql: str) -> bool:
 
 @mcp.tool()
 def execute_query(sql: str, database: str | None = None, limit: int = 100) -> str:
-    """Execute a read-only SQL query and return results as a formatted table.
+    """Execute a read-only SQL query and return results as JSON.
 
     Only SELECT, SHOW, EXPLAIN, DESCRIBE, and WITH statements are allowed.
     At most `limit` rows are returned (default 100, max 1000).
@@ -127,7 +102,7 @@ def execute_query(sql: str, database: str | None = None, limit: int = 100) -> st
                     cur.execute("USE `%s`" % database.replace("`", ""))
                 cur.execute(sql)
                 rows = cur.fetchmany(limit)
-        return f"{len(rows)} row(s)\n\n{_format_table(rows)}"
+        return json.dumps(rows)
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
@@ -149,7 +124,7 @@ def list_tables(database: str | None = None) -> str:
                 cur.execute("SHOW TABLES")
                 rows = cur.fetchall()
         tables = [list(row.values())[0] for row in rows]
-        return "\n".join(tables)
+        return json.dumps(tables)
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
@@ -170,7 +145,7 @@ def describe_table(table: str, database: str | None = None) -> str:
                     cur.execute("USE `%s`" % database.replace("`", ""))
                 cur.execute("DESCRIBE `%s`" % table.replace("`", ""))
                 rows = cur.fetchall()
-        return _format_table(rows)
+        return json.dumps(rows)
     except pymysql.Error as exc:
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:

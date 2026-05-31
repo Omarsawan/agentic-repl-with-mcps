@@ -30,5 +30,45 @@ class AgentProvider(ABC):
 
     @abstractmethod
     async def chat(self, messages: list[dict], tools: list[dict]) -> ChatResponse:
-        """Send conversation history and tools schema; return the model's response."""
+        """Send conversation history and available tools; return the model's response.
+
+        ``messages`` is a list of dicts in OpenAI chat format:
+
+            # user turn
+            {"role": "user", "content": "<text>"}
+
+            # assistant turn (with tool calls)
+            {
+                "role": "assistant",
+                "content": "<text or None>",
+                "tool_calls": [
+                    {
+                        "id": "<call-id>",
+                        "type": "function",
+                        "function": {"name": "<tool-name>", "arguments": "<json-string>"},
+                    }
+                ],
+            }
+
+            # tool result turn
+            {"role": "tool", "tool_call_id": "<call-id>", "content": "<result-text>"}
+
+            # assistant turn (no tool calls)
+            {"role": "assistant", "content": "<text>"}
+
+        ``tools`` is a list of dicts in OpenAI function-calling format:
+
+            {
+                "type": "function",
+                "function": {
+                    "name": "<server>__<tool>",   # e.g. "mysql__execute_query"
+                    "description": "<text>",
+                    "parameters": {               # JSON Schema (mirrors MCP inputSchema)
+                        "type": "object",
+                        "properties": {...},
+                        "required": [...],
+                    },
+                },
+            }
+        """
         ...
