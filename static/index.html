@@ -389,6 +389,7 @@
 <header>
   <h1>MCP Agent <span id="tool-count"></span></h1>
   <div class="header-actions">
+    <button class="btn" id="confirm-btn" onclick="toggleConfirm()" title="Toggle tool-call confirmation">Confirm: OFF</button>
     <button class="btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <button class="btn btn-danger" onclick="resetChat()">Reset</button>
   </div>
@@ -424,6 +425,7 @@
     ASSISTANT:      'assistant',
     ERROR:          'error',
     SYSTEM:         'system',
+    SET_CONFIRM:    'set_confirm',
   });
 
   // ── WebSocket ────────────────────────────────────────────────────────────
@@ -431,6 +433,7 @@
   let ws;
   let pendingToolCalls = [];
   let thinkingEl = null;
+  let confirmEnabled = false;
 
   function connect() {
     ws = new WebSocket(wsUrl);
@@ -464,7 +467,16 @@
       removeThinking();
       setInputEnabled(false);
       addInputRequest(event.prompt);
+    } else if (event.type === EventType.SET_CONFIRM) {
+      confirmEnabled = event.value;
+      document.getElementById('confirm-btn').textContent = `Confirm: ${confirmEnabled ? 'ON' : 'OFF'}`;
     }
+  }
+
+  function toggleConfirm() {
+    confirmEnabled = !confirmEnabled;
+    document.getElementById('confirm-btn').textContent = `Confirm: ${confirmEnabled ? 'ON' : 'OFF'}`;
+    ws.send(JSON.stringify({ type: EventType.SET_CONFIRM, value: confirmEnabled }));
   }
 
   // ── DOM helpers ──────────────────────────────────────────────────────────

@@ -25,11 +25,12 @@ MAX_TOOL_ITERATIONS = 20
 
 _BUILTIN_HELP = """\
 Commands:
-  /tools    — list all available MCP tools
-  /commands — list custom commands loaded from custom_commands.json
-  /history  — print conversation history
-  /reset    — clear conversation history
-  /quit     — exit
+  /tools              — list all available MCP tools
+  /commands           — list custom commands loaded from custom_commands.json
+  /history            — print conversation history
+  /reset              — clear conversation history
+  /confirm [on|off]   — toggle (or set) tool-call confirmation gate
+  /quit               — exit
 """
 
 
@@ -46,14 +47,21 @@ class MCPHost:
         self._history: list[dict] = []
         self._custom_commands: dict[str, dict] = {}
         self._exit_stack = AsyncExitStack()
+        self._confirm_tool_calls: bool = False
+        self._prompt_fn = None  # stored on host so _dispatch_tool can reach it
 
     def set_interaction_fns(self, notify_fn, prompt_fn) -> None:
         """Set (or clear) the notify and prompt callbacks on the active provider."""
+        self._prompt_fn = prompt_fn
         if self._provider is not None:
             if hasattr(self._provider, "notify_fn"):
                 self._provider.notify_fn = notify_fn
             if hasattr(self._provider, "prompt_fn"):
                 self._provider.prompt_fn = prompt_fn
+
+    def set_confirm(self, enabled: bool) -> None:
+        """Enable or disable the tool-call confirmation gate."""
+        self._confirm_tool_calls = enabled
 
     # ------------------------------------------------------------------
     # Setup
@@ -65,6 +73,7 @@ class MCPHost:
             config: dict = json.load(f)
 
         self._provider = build_provider(config.get("agent", {}))
+        self._confirm_tool_calls = config.get("agent", {}).get("confirm_tool_calls", False)
 
         servers: dict[str, dict] = config.get("mcpServers", {})
         for server_name, server_cfg in servers.items():
@@ -110,6 +119,27 @@ class MCPHost:
     # Agent loop
     # ------------------------------------------------------------------
 
+    async def _confirm_tool_call(
+        self,
+        call: ToolCall,
+        emit: Callable[[dict], Coroutine] | None,
+    ) -> str | None:
+        """Ask the user to confirm a tool call. Returns None to proceed, or a cancellation string."""
+        args_str = json.dumps(call.arguments, indent=2, ensure_ascii=False)
+        prompt = (
+            f"Confirm call to '{call.name}' with:\n{args_str}\n"
+            "Proceed? [Y/n]: "
+        )
+        answer = await self._prompt_fn(prompt) if self._prompt_fn else await self._read_input(prompt)
+        if answer.strip().lower() in ("n", "no"):
+            cancelled = "Tool call cancelled by user."
+            if emit:
+                await emit({"type": EventType.TOOL_RESULT, "name": call.name, "result": cancelled})
+            else:
+                print(f"  ← {cancelled}")
+            return cancelled
+        return None
+
     async def _dispatch_tool(
         self,
         call: ToolCall,
@@ -123,6 +153,12 @@ class MCPHost:
             await emit({"type": EventType.TOOL_CALL, "name": call.name, "args": call.arguments})
         else:
             print(f"  → {call.name}({json.dumps(call.arguments, ensure_ascii=False)})")
+
+        if self._confirm_tool_calls:
+            cancelled = await self._confirm_tool_call(call, emit)
+            if cancelled is not None:
+                return cancelled
+
         try:
             result = str(await client.call_tool(original_name, call.arguments))
             if emit:
@@ -245,6 +281,30 @@ class MCPHost:
     def _format_help(self) -> str:
         return _BUILTIN_HELP + "\n" + self._format_custom_commands()
 
+    async def _handle_confirm_command(
+        self,
+        content: str,
+        emit: Callable[[dict], Coroutine] | None,
+    ) -> None:
+        """Toggle or set the tool-call confirmation gate and notify the user."""
+        async def send_system(msg: str) -> None:
+            if emit:
+                await emit({"type": EventType.SYSTEM, "message": msg})
+                await emit({"type": EventType.SET_CONFIRM, "value": self._confirm_tool_calls})
+            else:
+                print(msg)
+
+        parts = content.split()
+        if len(parts) > 1 and parts[1] == "off":
+            self._confirm_tool_calls = False
+        elif len(parts) > 1 and parts[1] == "on":
+            self._confirm_tool_calls = True
+        else:
+            self._confirm_tool_calls = not self._confirm_tool_calls
+
+        state = "enabled" if self._confirm_tool_calls else "disabled"
+        await send_system(f"Tool-call confirmation {state}.")
+
     async def handle_input(
         self,
         content: str,
@@ -285,6 +345,9 @@ class MCPHost:
             return
         if content == "/commands":
             await send_text(self._format_custom_commands())
+            return
+        if content == "/confirm" or content.startswith("/confirm "):
+            await self._handle_confirm_command(content, emit)
             return
         if content.startswith("/"):
             cmd_name = content[1:]

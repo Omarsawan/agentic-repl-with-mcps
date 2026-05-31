@@ -55,6 +55,9 @@ def make_app(host) -> FastAPI:
 
         host.set_interaction_fns(notify_fn, prompt_fn)
 
+        # Sync the current confirmation state to the newly connected client.
+        await emit({"type": EventType.SET_CONFIRM, "value": host._confirm_tool_calls})
+
         try:
             while True:
                 data = await ws.receive_json()
@@ -62,6 +65,8 @@ def make_app(host) -> FastAPI:
                     # Sent by the browser when the user submits the inline argument form.
                     # Routes the value back to prompt_fn, which is suspended on input_queue.get().
                     await input_queue.put(data.get("value", ""))
+                elif data.get("type") == EventType.SET_CONFIRM:
+                    host.set_confirm(bool(data.get("value", False)))
                 elif content := data.get("content", "").strip():
                     # process turn normally
                     spawn_turn(content)
