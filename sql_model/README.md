@@ -26,29 +26,64 @@ User Query
 | `template_engine.py` | Schema-aware SQL template filler |
 | `query_detector.py` | Heuristic classifier: SQL query vs general action |
 | `dataset.py` | HuggingFace Spider dataset loader |
+| `finetune_data.py` | Synthetic data generation from a production schema |
 | `trainer.py` | AdamW training loop with checkpoint save/load |
-| `train.py` | CLI training entrypoint |
+| `train.py` | Unified CLI entry point for pretraining and fine-tuning |
 
 ---
 
 ## Training
 
-Train the seq2seq model on the Spider text-to-SQL dataset:
+`train.py` is the single entry point for both modes.
+
+### Pretrain from scratch
+
+Train on the Spider text-to-SQL dataset:
 
 ```bash
-uv run python -m sql_model.train --epochs 10 --batch-size 32
+uv run python -m sql_model.train pretrain --epochs 10 --batch-size 32
 ```
 
-Options:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--epochs` | 5 | Number of training epochs |
 | `--batch-size` | 32 | Batch size |
+| `--lr` | 3e-4 | Peak learning rate (linear warmup then constant) |
 | `--checkpoint-dir` | `sql_model/checkpoints` | Where to save checkpoints |
 | `--device` | `cpu` | `cpu` or `cuda` |
 | `--save-every` | 5 | Save a periodic snapshot every N epochs |
 | `--resume` | — | Path to a checkpoint to load weights from before training |
 | `--patience` | 3 | Stop early after this many epochs with no loss improvement |
+| `--no-warmup` | — | Disable LR warmup, train at constant LR from step 0 |
+
+### Fine-tune on a production schema
+
+Adapt a pretrained checkpoint to a specific database by generating synthetic training data from its schema:
+
+```bash
+uv run python -m sql_model.train finetune \
+    --checkpoint sql_model/checkpoints/best_model.pt \
+    --schema-file path/to/schema.json
+```
+
+The schema file must be a JSON array with `TABLE_SCHEMA`, `TABLE_NAME`, and `COLUMN_NAME` fields — the output of an `INFORMATION_SCHEMA.COLUMNS` query. You can generate it by asking the agent to run:
+
+```sql
+SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA NOT IN ('information_schema','mysql','performance_schema','sys')
+ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--checkpoint` | (required) | Pretrained checkpoint to start from |
+| `--schema-file` | (required) | JSON file with INFORMATION_SCHEMA output |
+| `--output` | `sql_model/checkpoints/finetuned.pt` | Output checkpoint path |
+| `--epochs` | 10 | Fine-tuning epochs |
+| `--lr` | 3e-5 | Learning rate (lower than pretraining) |
+| `--batch-size` | 16 | Batch size |
+| `--device` | `cpu` | `cpu` or `cuda` |
 
 ### Checkpoints
 
@@ -56,27 +91,27 @@ Options:
 
 ```
 sql_model/checkpoints/
-  best_model.pt                          ← always the best loss seen
+  best_model.pt                          ← always the best pretrain loss seen
   checkpoint_20260531_143012_epoch_5.pt  ← periodic snapshot
-  checkpoint_20260531_143012_epoch_10.pt
+  finetuned.pt                           ← best fine-tuned checkpoint
 ```
 
-### Resuming training
+### Resuming pretraining
 
 Load weights from any checkpoint before starting a new run:
 
 ```bash
-uv run python -m sql_model.train --epochs 10 --resume sql_model/checkpoints/best_model.pt
+uv run python -m sql_model.train pretrain --epochs 10 --resume sql_model/checkpoints/best_model.pt
 ```
 
 The epoch counter always starts at 1; `--epochs` controls how many epochs the new run trains for.
 
 ### Early stopping
 
-Training stops automatically when loss does not improve for `--patience` consecutive epochs (default: 3). To disable, set `--patience` higher than `--epochs`:
+Pretraining stops automatically when loss does not improve for `--patience` consecutive epochs (default: 3). To disable, set `--patience` higher than `--epochs`:
 
 ```bash
-uv run python -m sql_model.train --epochs 10 --patience 2
+uv run python -m sql_model.train pretrain --epochs 10 --patience 20
 ```
 
 ---

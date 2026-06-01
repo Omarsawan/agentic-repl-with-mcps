@@ -47,7 +47,15 @@ class SQLHandler(PromptHandler):
             try:
                 from sql_model.trainer import Trainer  # type: ignore[import]
 
-                self._model, self._tokenizer = Trainer.load(checkpoint_path)
+                self._model, self._tokenizer, ckpt_max_src_len = Trainer.load(checkpoint_path)
+                if ckpt_max_src_len != _MAX_SRC_TOKENS:
+                    logger.warning(
+                        "SQLHandler: checkpoint trained with max_src_len=%d but handler uses _MAX_SRC_TOKENS=%d — inputs in range [%d, %d] will use untrained positional embeddings",
+                        ckpt_max_src_len,
+                        _MAX_SRC_TOKENS,
+                        min(ckpt_max_src_len, _MAX_SRC_TOKENS),
+                        max(ckpt_max_src_len, _MAX_SRC_TOKENS),
+                    )
                 logger.info("SQLHandler: loaded model from %s", checkpoint_path)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("SQLHandler: could not load model from %s: %s", checkpoint_path, exc)
@@ -353,13 +361,22 @@ class SQLHandler(PromptHandler):
             return None
 
     def _relevant_schema(self, user_text: str) -> dict[str, list[str]]:
-        lower = user_text.lower()
-        matched = {
-            table: cols
-            for table, cols in self._schema.items()
-            if table.split(".")[-1].lower() in lower
-        }
-        return matched if matched else self._schema
+        """Return all schema tables ordered by relevance to user_text.
+
+        Tables whose name or database name appears in the question are placed
+        first so that truncation to _MAX_SRC_TOKENS preferentially removes the
+        least-relevant tables from the tail rather than cutting arbitrarily.
+        """
+        user_text_lower = user_text.lower()
+        matched, others = {}, {}
+        for table, cols in self._schema.items():
+            parts = table.lower().split(".")
+            db_name, table_name = (parts[0], parts[-1]) if len(parts) > 1 else ("", parts[0])
+            if table_name in user_text_lower or db_name in user_text_lower:
+                matched[table] = cols
+            else:
+                others[table] = cols
+        return {**matched, **others}
 
     @staticmethod
     def _is_error_response(content: str) -> bool:

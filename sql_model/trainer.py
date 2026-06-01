@@ -1,4 +1,5 @@
 import os
+
 import torch
 import torch.nn as nn
 
@@ -12,14 +13,28 @@ class Trainer:
         model: Seq2SeqTransformer,
         tokenizer: SQLTokenizer,
         checkpoint_dir: str = "sql_model/checkpoints",
+        lr: float = 3e-4,
+        total_steps: int = 0,
+        warmup_ratio: float = 0.1,
+        max_src_len: int = 512,
     ):
         self.model = model
         self.tokenizer = tokenizer
+        self.max_src_len = max_src_len
         self.checkpoint_dir = checkpoint_dir
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
         self.criterion = nn.CrossEntropyLoss(ignore_index=PAD_ID)
+
+        # Linear warmup for first warmup_ratio of steps, then constant LR
+        if total_steps > 0:
+            warmup_steps = max(1, int(total_steps * warmup_ratio))
+            def _lr_lambda(step: int) -> float:
+                return min(1.0, step / warmup_steps)
+            self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, _lr_lambda)
+        else:
+            self.scheduler = None
 
     def train_epoch(self, dataloader) -> float:
         self.model.train()
@@ -38,7 +53,10 @@ class Trainer:
             loss = self.criterion(logits.reshape(B * T, V), tgt_out.reshape(B * T))
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             total_loss += loss.item()
             total_batches += 1
@@ -54,19 +72,20 @@ class Trainer:
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "tokenizer": self.tokenizer.token2id,
+                "max_src_len": self.max_src_len,
             },
             path,
         )
 
     def resume(self, path: str) -> None:
-        checkpoint = torch.load(path, map_location=next(self.model.parameters()).device)
+        checkpoint = torch.load(path, map_location=next(self.model.parameters()).device, weights_only=False)
         self.model.load_state_dict(checkpoint["model"])
         if "optimizer" in checkpoint:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
 
     @classmethod
-    def load(cls, path: str, device: str = "cpu") -> tuple["Seq2SeqTransformer", "SQLTokenizer"]:
-        checkpoint = torch.load(path, map_location=device)
+    def load(cls, path: str, device: str = "cpu") -> tuple["Seq2SeqTransformer", "SQLTokenizer", int]:
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
 
         token2id: dict = checkpoint["tokenizer"]
         tokenizer = SQLTokenizer()
@@ -79,4 +98,5 @@ class Trainer:
         model.to(device)
         model.eval()
 
-        return model, tokenizer
+        max_src_len: int = checkpoint.get("max_src_len", 256)
+        return model, tokenizer, max_src_len

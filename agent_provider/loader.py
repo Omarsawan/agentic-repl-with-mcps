@@ -32,6 +32,10 @@ def build_provider(config: dict) -> AgentProvider:
         from agent_provider.sql_handler import SQLHandler
         from agent_provider.generic_routing import GenericRoutingProvider
         sql_kwargs = {k: v for k, v in config.items() if k in {"checkpoint_path", "intent_confidence_threshold", "execute_query_tool"}}
+        # Prefer the fine-tuned checkpoint (production schema) when it exists
+        finetuned = config.get("finetuned_checkpoint")
+        if finetuned and os.path.isfile(finetuned):
+            sql_kwargs["checkpoint_path"] = finetuned
         return GenericRoutingProvider(
             handlers=[SQLHandler(**sql_kwargs)],
             fallback_provider=KeywordMatchProvider(),
