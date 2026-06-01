@@ -229,9 +229,18 @@ class MCPHost:
                 # Final answer
                 self._history.append({"role": "assistant", "content": response.content or ""})
                 if emit:
-                    await emit({"type": EventType.ASSISTANT, "content": response.content or ""})
+                    event: dict = {"type": EventType.ASSISTANT, "content": response.content or ""}
+                    if response.meta:
+                        event["meta"] = response.meta
+                    await emit(event)
                 else:
-                    print(f"\nAssistant: {response.content}\n")
+                    print(f"\nAssistant: {response.content}")
+                    if response.meta:
+                        m = response.meta
+                        labels = {"template": "template engine", "neural": "neural model"}
+                        src = labels.get(m["source"], m["source"] or "no match")
+                        print(f"  [Intent: {m['intent']} | Confidence: {m['confidence']:.0%} | Source: {src}]")
+                    print()
                 break
         else:
             if emit:

@@ -177,6 +177,21 @@
     .bubble table { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
     .bubble th, .bubble td { border: 1px solid var(--border-input); padding: 4px 10px; }
     .bubble th { background: var(--table-th-bg); }
+    .meta-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .meta-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: var(--bg-code);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      font-family: monospace;
+    }
 
     /* ── Tool call block ── */
     .tool-block {
@@ -454,7 +469,8 @@
       addThinking();
     } else if (event.type === EventType.ASSISTANT) {
       removeThinking();
-      addMessage('assistant', event.content);
+      const row = addMessage('assistant', event.content);
+      if (event.meta) addMetaBar(row, event.meta);
       setInputEnabled(true);
     } else if (event.type === EventType.ERROR) {
       removeThinking();
@@ -506,6 +522,27 @@
     chatEl.appendChild(row);
     scrollToBottom();
     return row;
+  }
+
+  function addMetaBar(row, meta) {
+    const labels = { template: 'template engine', neural: 'neural model' };
+    const chips = [
+      `Intent: ${meta.intent}`,
+      `Confidence: ${(meta.confidence * 100).toFixed(0)}%`,
+      `Source: ${labels[meta.source] ?? meta.source ?? 'no match'}`,
+    ];
+    if (meta.entities && Object.keys(meta.entities).length) {
+      chips.push('Entities: ' + Object.entries(meta.entities).map(([k, v]) => `${k}=${v}`).join(', '));
+    }
+    const bar = document.createElement('div');
+    bar.className = 'meta-bar';
+    chips.forEach(text => {
+      const chip = document.createElement('span');
+      chip.className = 'meta-chip';
+      chip.textContent = text;
+      bar.appendChild(chip);
+    });
+    row.querySelector('.bubble').appendChild(bar);
   }
 
   function addToolCall(name, args) {

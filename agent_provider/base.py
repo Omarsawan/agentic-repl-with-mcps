@@ -54,6 +54,7 @@ class ChatResponse:
 
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    meta: dict | None = None
 
 
 class AgentProvider(ABC):

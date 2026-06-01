@@ -158,7 +158,7 @@ class SQLHandler(PromptHandler):
                         ToolCall(
                             id=next_id,
                             name=self._sql_tool_name,
-                            arguments={self._sql_param_name: _SCHEMA_FETCH_QUERY},
+                            arguments={self._sql_param_name: _SCHEMA_FETCH_QUERY, 'limit': 1000},
                         )
                     ],
                 )
@@ -223,7 +223,7 @@ class SQLHandler(PromptHandler):
             logger.warning("SQLHandler: SQL execution returned error: %s", sql_result[:200])
             self._dispatched_sql = None
             self._step = SqlStep.DISPATCH_SQL
-            return ChatResponse(content=f"SQL execution failed:\n```\n{sql_result}\n```", tool_calls=[])
+            return ChatResponse(content=f"SQL execution failed:\n```\n{sql_result}\n```", tool_calls=[], meta=self._last_sql_meta or None)
 
         executed_sql = self._dispatched_sql
         self._dispatched_sql = None
@@ -234,19 +234,7 @@ class SQLHandler(PromptHandler):
         except (json.JSONDecodeError, TypeError):
             formatted_sql = f"```\n{sql_result}\n```"
         content = f"```sql\n{executed_sql}\n```\n\n**Results:**\n{formatted_sql}"
-        meta = self._last_sql_meta
-        if meta:
-            source_labels = {"template": "template engine", "neural": "neural model", None: "no match"}
-            parts = [
-                f"Intent: `{meta['intent']}`",
-                f"Confidence: `{meta['confidence']:.0%}`",
-                f"Source: {source_labels.get(meta['source'], meta['source'])}",
-            ]
-            if meta.get("entities"):
-                entities_str = ", ".join(f"{k}={v}" for k, v in meta["entities"].items())
-                parts.append(f"Entities: `{entities_str}`")
-            content += "\n\n---\n*" + " · ".join(parts) + "*"
-        return ChatResponse(content=content, tool_calls=[])
+        return ChatResponse(content=content, tool_calls=[], meta=self._last_sql_meta or None)
 
     # ------------------------------------------------------------------
     # Helpers
