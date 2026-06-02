@@ -23,6 +23,7 @@ _NL_QUESTIONS: dict[str, list[str]] = {
         "how many {table} are there",
         "count all {table}",
         "what is the total number of {table}",
+        "what is the total number of rows in {table}",
         "show me the count of {table}",
     ],
     "SUM": [
@@ -118,9 +119,35 @@ def parse_schema_file(path: str) -> dict[str, list[str]]:
     return schema
 
 
+def _relevant_schema_for_pair(question: str, schema: dict[str, list[str]]) -> str:
+    """Order schema tables using the same 3-tier logic as sql_handler._relevant_schema.
+
+    Tier 1: both db prefix AND short table name appear in the question.
+    Tier 2: either db prefix OR short table name appears.
+    Tier 3: neither.
+
+    This mirrors what the inference handler does so training and inference see
+    the same schema ordering, keeping the target table at the top of the input.
+    """
+    lower = question.lower()
+    tier1: dict[str, list[str]] = {}
+    tier2: dict[str, list[str]] = {}
+    tier3: dict[str, list[str]] = {}
+    for tbl, cols in schema.items():
+        parts = tbl.lower().split(".")
+        db_hit = len(parts) > 1 and parts[0] in lower
+        tbl_hit = parts[-1] in lower
+        if db_hit and tbl_hit:
+            tier1[tbl] = cols
+        elif db_hit or tbl_hit:
+            tier2[tbl] = cols
+        else:
+            tier3[tbl] = cols
+    return _format_schema({**tier1, **tier2, **tier3})
+
+
 def generate_pairs(schema: dict[str, list[str]]) -> list[dict]:
     """Generate synthetic (src_text, tgt_text) training pairs from a production schema."""
-    schema_str = _format_schema(schema)
     pairs: list[dict] = []
 
     for table, cols in schema.items():
@@ -152,6 +179,7 @@ def generate_pairs(schema: dict[str, list[str]]) -> list[dict]:
 
             for q_template in questions:
                 question = q_template.format(**nl_slots)
+                schema_str = _relevant_schema_for_pair(question, schema)
                 pairs.append({"src_text": f"{question} [SEP] {schema_str}", "tgt_text": sql})
 
     logger.info("Generated %d synthetic training pairs from %d tables", len(pairs), len(schema))

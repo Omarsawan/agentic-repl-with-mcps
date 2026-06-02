@@ -26,6 +26,7 @@ The server opens an SSH tunnel automatically on startup.
 
 import atexit
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -38,6 +39,9 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP("mysql")
 
@@ -128,11 +132,13 @@ def execute_query(sql: str, database: str | None = None, limit: int = 100) -> st
                 rows = cur.fetchmany(limit)
         return json.dumps(rows)
     except pymysql.Error as exc:
+        logger.error("MySQL error: %s", exc, exc_info=True)
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
             return f"error: Connection error (code {code})"
         return f"error: {exc}"
-    except Exception:
+    except Exception as exc:
+        logger.error("Unexpected server error: %s", exc, exc_info=True)
         return "error: Server error"
 
 
@@ -150,11 +156,13 @@ def list_tables(database: str | None = None) -> str:
         tables = [list(row.values())[0] for row in rows]
         return json.dumps(tables)
     except pymysql.Error as exc:
+        logger.error("MySQL error: %s", exc, exc_info=True)
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
             return f"error: Connection error (code {code})"
         return f"error: {exc}"
-    except Exception:
+    except Exception as exc:
+        logger.error("Unexpected server error: %s", exc, exc_info=True)
         return "error: Server error"
 
 
@@ -171,11 +179,13 @@ def describe_table(table: str, database: str | None = None) -> str:
                 rows = cur.fetchall()
         return json.dumps(rows)
     except pymysql.Error as exc:
+        logger.error("MySQL error: %s", exc, exc_info=True)
         code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else 0
         if code >= 2000:
             return f"error: Connection error (code {code})"
         return f"error: {exc}"
-    except Exception:
+    except Exception as exc:
+        logger.error("Unexpected server error: %s", exc, exc_info=True)
         return "error: Server error"
 
 

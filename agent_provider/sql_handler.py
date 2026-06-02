@@ -333,6 +333,15 @@ class SQLHandler(PromptHandler):
             )
             src_text = f"{user_text} [SEP] {schema_str}"
             src_ids = self._tokenizer.encode(src_text)
+            decoded_tokens = [self._tokenizer.id2token.get(i, "<unk>") for i in src_ids]
+            unk_count = decoded_tokens.count("<unk>")
+            logger.info(
+                "SQLHandler: encoder input — %d tokens, %d <unk> (%.0f%% OOV): %s",
+                len(decoded_tokens),
+                unk_count,
+                100 * unk_count / max(1, len(decoded_tokens)),
+                " ".join(decoded_tokens[:80]),
+            )
             if len(src_ids) > _MAX_SRC_TOKENS:
                 logger.warning(
                     "SQLHandler: input truncated from %d to %d tokens",
@@ -341,7 +350,7 @@ class SQLHandler(PromptHandler):
                 )
                 src_ids = src_ids[:_MAX_SRC_TOKENS]
             src = torch.tensor([src_ids])
-            generated_ids = self._model.generate(src, bos_id=BOS_ID, eos_id=EOS_ID, max_len=256)
+            generated_ids = self._model.generate(src, bos_id=BOS_ID, eos_id=EOS_ID, max_len=256, beam_size=4)
             sql = self._tokenizer.decode(generated_ids)
             return sql if sql.strip() else None
         except Exception as exc:  # noqa: BLE001
@@ -351,20 +360,26 @@ class SQLHandler(PromptHandler):
     def _relevant_schema(self, user_text: str) -> dict[str, list[str]]:
         """Return all schema tables ordered by relevance to user_text.
 
-        Tables whose name or database name appears in the question are placed
-        first so that truncation to _MAX_SRC_TOKENS preferentially removes the
-        least-relevant tables from the tail rather than cutting arbitrarily.
+        Tables are ordered in three tiers so truncation to _MAX_SRC_TOKENS
+        preserves the most-specific matches first:
+          1. Both db name AND table name appear in the question (highest priority)
+          2. Either db name OR table name appears
+          3. Neither (lowest priority)
         """
         user_text_lower = user_text.lower()
-        matched, others = {}, {}
+        both, one, neither = {}, {}, {}
         for table, cols in self._schema.items():
             parts = table.lower().split(".")
             db_name, table_name = (parts[0], parts[-1]) if len(parts) > 1 else ("", parts[0])
-            if table_name in user_text_lower or db_name in user_text_lower:
-                matched[table] = cols
+            db_hit = bool(db_name) and db_name in user_text_lower
+            tbl_hit = table_name in user_text_lower
+            if db_hit and tbl_hit:
+                both[table] = cols
+            elif db_hit or tbl_hit:
+                one[table] = cols
             else:
-                others[table] = cols
-        return {**matched, **others}
+                neither[table] = cols
+        return {**both, **one, **neither}
 
     @staticmethod
     def _is_error_response(content: str) -> bool:

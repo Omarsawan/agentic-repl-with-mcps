@@ -1,3 +1,4 @@
+import logging
 import os
 
 import torch
@@ -5,6 +6,8 @@ import torch.nn as nn
 
 from .model import Seq2SeqTransformer
 from .tokenizer import SQLTokenizer, PAD_ID
+
+logger = logging.getLogger(__name__)
 
 
 class Trainer:
@@ -99,4 +102,11 @@ class Trainer:
         model.eval()
 
         max_src_len: int = checkpoint.get("max_src_len", 256)
+        logger.info(
+            "Loaded checkpoint: vocab_size=%d, max_src_len=%d, epoch=%s, loss=%s",
+            vocab_size,
+            max_src_len,
+            checkpoint.get("epoch", "?"),
+            f"{checkpoint['loss']:.4f}" if "loss" in checkpoint else "?",
+        )
         return model, tokenizer, max_src_len

@@ -23,8 +23,15 @@ class TemplateEngine:
 
     def _find_table(self, text: str) -> str | None:
         lower = text.lower()
+        # Tier 1: both db prefix AND short table name appear in text
         for table in self.schema:
-            if table.lower() in lower:
+            parts = table.lower().split(".", 1)
+            if len(parts) == 2 and parts[0] in lower and parts[1] in lower:
+                return table
+        # Tier 2: short table name (or unqualified full name) appears in text
+        for table in self.schema:
+            short = table.lower().split(".")[-1]
+            if short in lower or table.lower() in lower:
                 return table
         return None
 

@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 
 from collections.abc import Callable, Coroutine
@@ -418,6 +419,7 @@ class MCPHost:
 
 async def main() -> None:
     """Parse arguments and run the MCPHost in terminal or web mode."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(description="MCP Agent REPL")
     parser.add_argument("config", nargs="?", type=Path, default=CONFIG_FILE, help="Path to config JSON")
     parser.add_argument("--web", action="store_true", help="Start web UI instead of terminal REPL")

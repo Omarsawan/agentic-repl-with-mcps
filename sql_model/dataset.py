@@ -96,10 +96,17 @@ class SpiderDataset(Dataset):
                     continue
                 schema = db_schemas[db_id]
                 lower_question = question.lower()
-                schema = {
-                    **{t: c for t, c in schema.items() if t.lower() in lower_question or db_id.lower() in lower_question},
-                    **{t: c for t, c in schema.items() if t.lower() not in lower_question and db_id.lower() not in lower_question},
-                }
+                db_hit = db_id.lower() in lower_question
+                both, one, neither = {}, {}, {}
+                for t, c in schema.items():
+                    tbl_hit = t.lower() in lower_question
+                    if tbl_hit and db_hit:
+                        both[t] = c
+                    elif tbl_hit or db_hit:
+                        one[t] = c
+                    else:
+                        neither[t] = c
+                schema = {**both, **one, **neither}
                 schema_str = _format_schema(db_id, schema)
                 query = _qualify_sql(item["query"], db_id, list(schema.keys()))
                 src_text = f"{question} [SEP] {schema_str}"

@@ -82,26 +82,52 @@ class Seq2SeqTransformer(nn.Module):
         bos_id: int,
         eos_id: int,
         max_len: int = 256,
+        beam_size: int = 4,
     ) -> list[int]:
         self.eval()
         src_pad_mask = self._src_key_padding_mask(src)
         src_emb = self.pos_enc(self.src_embed(src) * math.sqrt(self.d_model))
         memory = self.transformer.encoder(src_emb, src_key_padding_mask=src_pad_mask)
 
-        tgt = torch.tensor([[bos_id]], device=src.device)
-        generated: list[int] = []
+        # Each beam: (cumulative_log_prob, token_ids, tgt_tensor)
+        beams: list[tuple[float, list[int], Tensor]] = [
+            (0.0, [], torch.tensor([[bos_id]], device=src.device))
+        ]
+        completed: list[tuple[float, list[int]]] = []
 
         for _ in range(max_len):
-            tgt_emb = self.pos_enc(self.tgt_embed(tgt) * math.sqrt(self.d_model))
-            tgt_mask = nn.Transformer.generate_square_subsequent_mask(
-                tgt.size(1), device=src.device
-            )
-            out = self.transformer.decoder(tgt_emb, memory, tgt_mask=tgt_mask)
-            logits = self.proj(out[:, -1, :])
-            next_id = logits.argmax(-1).item()
-            if next_id == eos_id:
+            if not beams:
                 break
-            generated.append(next_id)
-            tgt = torch.cat([tgt, torch.tensor([[next_id]], device=src.device)], dim=1)
+            candidates: list[tuple[float, list[int], Tensor]] = []
+            for log_prob, tokens, tgt in beams:
+                tgt_emb = self.pos_enc(self.tgt_embed(tgt) * math.sqrt(self.d_model))
+                tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+                    tgt.size(1), device=src.device
+                )
+                out = self.transformer.decoder(
+                    tgt_emb, memory,
+                    tgt_mask=tgt_mask,
+                    memory_key_padding_mask=src_pad_mask,
+                )
+                log_probs = torch.log_softmax(self.proj(out[:, -1, :]), dim=-1)[0]
+                top_lp, top_ids = log_probs.topk(beam_size)
+                for lp, idx in zip(top_lp.tolist(), top_ids.tolist()):
+                    new_lp = log_prob + lp
+                    new_tokens = tokens + [idx]
+                    new_tgt = torch.cat(
+                        [tgt, torch.tensor([[idx]], device=src.device)], dim=1
+                    )
+                    if idx == eos_id:
+                        completed.append((new_lp, tokens))  # exclude eos token
+                    else:
+                        candidates.append((new_lp, new_tokens, new_tgt))
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            beams = candidates[:beam_size]
 
-        return generated
+        if completed:
+            completed.sort(key=lambda x: x[0], reverse=True)
+            return completed[0][1]
+        if beams:
+            beams.sort(key=lambda x: x[0], reverse=True)
+            return beams[0][1]
+        return []

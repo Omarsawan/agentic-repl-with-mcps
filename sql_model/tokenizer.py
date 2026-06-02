@@ -56,13 +56,28 @@ class SQLTokenizer:
         return [self.token2id.get(t, UNK_ID) for t in self._tokenize(text)]
 
     def decode(self, ids: list[int]) -> str:
+        # Suppress spaces around punctuation so count(*) and schema.table render correctly.
+        NO_SPACE_BEFORE = {")", ".", ",", ";", "("}
+        NO_SPACE_AFTER = {"(", "."}
+
         tokens = []
         for i in ids:
             tok = self.id2token.get(i, "<unk>")
             if tok in ("<pad>", "<bos>", "<eos>"):
                 continue
             tokens.append(tok)
-        return " ".join(tokens)
+
+        if not tokens:
+            return ""
+
+        parts = [tokens[0]]
+        for tok in tokens[1:]:
+            if tok in NO_SPACE_BEFORE or parts[-1] in NO_SPACE_AFTER:
+                parts.append(tok)
+            else:
+                parts.append(" ")
+                parts.append(tok)
+        return "".join(parts)
 
     def save(self, path: str) -> None:
         Path(path).write_text(json.dumps({"token2id": self.token2id}))

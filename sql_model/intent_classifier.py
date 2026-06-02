@@ -57,7 +57,8 @@ class ClassificationResult:
 class IntentClassifier:
     def __init__(self):
         self._vectorizer = TfidfVectorizer(ngram_range=(1, 3), min_df=1)
-        self._centroids: np.ndarray | None = None
+        self._seed_matrix = None
+        self._seed_labels: list[str] = []
         self._intent_order: list[str] = []
         self._fit()
 
@@ -69,14 +70,9 @@ class IntentClassifier:
                 docs.append(seed)
                 labels.append(intent)
 
-        X = self._vectorizer.fit_transform(docs)
+        self._seed_matrix = self._vectorizer.fit_transform(docs)
+        self._seed_labels = labels
         self._intent_order = INTENTS
-        centroids = []
-        for intent in INTENTS:
-            idxs = [i for i, l in enumerate(labels) if l == intent]
-            centroid = X[idxs].mean(axis=0)
-            centroids.append(np.asarray(centroid))
-        self._centroids = np.vstack(centroids)
 
     def _extract_entities(self, text: str) -> dict:
         entities: dict = {}
@@ -94,9 +90,15 @@ class IntentClassifier:
 
     def classify(self, text: str) -> ClassificationResult:
         vec = self._vectorizer.transform([text.lower()])
-        sims = cosine_similarity(vec, self._centroids)[0]
-        best_idx = int(np.argmax(sims))
-        confidence = float(sims[best_idx])
-        intent = self._intent_order[best_idx]
+        # Compare against every seed, then take max similarity per intent.
+        # This avoids centroid dilution: a query matching one seed well should
+        # score highly even if it looks nothing like the other seeds in that intent.
+        all_sims = cosine_similarity(vec, self._seed_matrix)[0]
+        best_per_intent = {intent: 0.0 for intent in INTENTS}
+        for sim, label in zip(all_sims, self._seed_labels):
+            if sim > best_per_intent[label]:
+                best_per_intent[label] = sim
+        intent = max(best_per_intent, key=best_per_intent.__getitem__)
+        confidence = best_per_intent[intent]
         entities = self._extract_entities(text)
         return ClassificationResult(intent=intent, confidence=confidence, entities=entities)

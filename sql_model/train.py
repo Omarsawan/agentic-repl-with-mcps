@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .dataset import SpiderDataset, build_tokenizer_from_spider, collate_fn
@@ -14,6 +15,24 @@ from .model import Seq2SeqTransformer
 from .trainer import Trainer
 
 logger = logging.getLogger(__name__)
+
+
+def _extend_vocab(model: Seq2SeqTransformer, old_size: int, new_size: int) -> None:
+    """Grow embedding and projection layers in-place when vocab is extended."""
+    if new_size <= old_size:
+        return
+    d = model.d_model
+    device = next(model.parameters()).device
+    for attr in ("src_embed", "tgt_embed"):
+        old_emb = getattr(model, attr)
+        new_emb = nn.Embedding(new_size, d, padding_idx=old_emb.padding_idx)
+        new_emb.weight.data[:old_size] = old_emb.weight.data
+        setattr(model, attr, new_emb.to(device))
+    old_proj = model.proj
+    new_proj = nn.Linear(d, new_size)
+    new_proj.weight.data[:old_size] = old_proj.weight.data
+    new_proj.bias.data[:old_size] = old_proj.bias.data
+    model.proj = new_proj.to(device)
 
 
 def run_pretrain(args) -> None:
@@ -78,7 +97,7 @@ def run_pretrain(args) -> None:
 
 def run_finetune(args) -> None:
     print(f"Loading checkpoint from {args.checkpoint}")
-    model, tokenizer = Trainer.load(args.checkpoint, device=args.device)
+    model, tokenizer, _ = Trainer.load(args.checkpoint, device=args.device)
     model.train()
 
     print(f"Parsing schema from {args.schema_file}")
@@ -94,6 +113,23 @@ def run_finetune(args) -> None:
     for pair in random.sample(pairs, min(3, len(pairs))):
         print(f"  src: {pair['src_text'][:120]}")
         print(f"  tgt: {pair['tgt_text']}")
+
+    old_vocab_size = tokenizer.vocab_size
+    all_texts = [p["src_text"] for p in pairs] + [p["tgt_text"] for p in pairs]
+    tokenizer.build_vocab(all_texts)
+    new_vocab_size = tokenizer.vocab_size
+    if new_vocab_size > old_vocab_size:
+        print(f"Vocabulary extended: {old_vocab_size} → {new_vocab_size} tokens (+{new_vocab_size - old_vocab_size} new)")
+        _extend_vocab(model, old_vocab_size, new_vocab_size)
+    else:
+        print(f"Vocabulary unchanged: {old_vocab_size} tokens (all schema tokens already in vocab)")
+
+    print("Vocabulary coverage check on sample pairs (UNK=3 means OOV):")
+    from .tokenizer import UNK_ID
+    for pair in random.sample(pairs, min(5, len(pairs))):
+        src_ids = tokenizer.encode(pair["src_text"])
+        unk = sum(1 for t in src_ids if t == UNK_ID)
+        print(f"  OOV {unk}/{len(src_ids)} ({100*unk//max(1,len(src_ids))}%)  src: {pair['src_text'][:100]}")
 
     dataset = SyntheticDataset(pairs, tokenizer)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
